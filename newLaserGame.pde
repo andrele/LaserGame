@@ -1,10 +1,10 @@
-Ray newRay;
+ArrayList<Ray> rays;
 ArrayList<Mirror> mirrors;
 PVector mousePressedPos;
 PVector mouseReleasedPos;
 int screenW = 1600;
 int screenH = 500;
-int rayDist = (int)sqrt((float)(Math.pow(1600,2) + Math.pow(500,2)));
+static int rayDist = (int)sqrt((float)(Math.pow(1600,2) + Math.pow(500,2)));
 
 
 
@@ -53,41 +53,50 @@ void setup() {
   size( 1600, 500 );
   mousePressedPos = new PVector(0,0);
   mirrors = new ArrayList<Mirror>();
+  rays = new ArrayList<Ray>();
   smooth();
-  newRay = new Ray(200.0, 200.0, 0);
+  Ray newRay = new Ray(200.0, 200.0, 0);
+  rays.add(newRay);
   mirrors.add(new Mirror(1000, 300, 45, 100));
 }
 
 void draw() {
   background(255);
-  pushStyle();
-  stroke(255,0,0);
-  newRay.draw();
-  popStyle();
-  for (int i=0; i<mirrors.size(); i++) {
     
-    mirrors.get(i).draw();
+    int numRays = rays.size()-1;
     
-    PVector intersection = rayIntersection(newRay, mirrors.get(i));
-    if (intersection != null) {
-      ellipse( intersection.x, intersection.y, 10, 10);
-      Ray reflection = new Ray( intersection.x, intersection.y, reflectionAngleInDegrees( newRay, mirrors.get(i), intersection ));
-//      Ray normalAngle = new Ray( intersection.x, intersection.y, mirrors.get(i).angle + 90);
-//      normalAngle.draw();
-      pushStyle();
-      stroke(255,0,0);
-      reflection.draw();
-      popStyle();
-    }
-  }
-  
-//  line(300, 500, 800, 300);
-//  line(800, 500, 300, 300);
-//  
-//  PVector intersection = lineIntersection(300, 500, 800, 300, 800, 500, 300, 300);
+    for (int j=0; j<numRays; j++) {
+      Ray ray = rays.get(j);
+      for (int i=0; i<mirrors.size(); i++) {
+//        mirrors.get(i).draw();
+        PVector intersection = rayIntersection(ray, mirrors.get(i));
+        if (intersection != null) {
+          ellipse( intersection.x, intersection.y, 10, 10);
+          Ray reflection = new Ray( intersection.x, intersection.y, reflectionAngleInDegrees( ray, mirrors.get(i), intersection ));
+          rays.add(reflection);
+          numRays++;
+          ray.distance = dist(ray.origin.x, ray.origin.y, intersection.x, intersection.y);
+        } else {
+          ray.distance = rayDist;
+        }
+      }
 
-//  line(1000, 300, 1200, 100);
+    }
+    
+    pushStyle();
+    stroke(255,0,0);
+    for (Ray ray : rays) {
+
+      ray.draw();
+    }
+    popStyle();
+
+
+    for (Mirror mirror : mirrors) {
+      mirror.draw();
+    }
 }
+
 
 
 
@@ -121,11 +130,9 @@ float reflectionAngleInDegrees( Ray incoming, Ray surface, PVector intersection 
 }
 
 void mouseClicked() { 
-//  mousePressedPos = new PVector(mouseX, mouseY);
-//  Mirror mirror = new Mirror(mouseX, mouseY, 45, 100);
-//  mirrors.add(mirror);
-  newRay.origin.x = mouseX;
-  newRay.origin.y = mouseY;
+  mousePressedPos = new PVector(mouseX, mouseY);
+  Mirror mirror = new Mirror(mouseX, mouseY, 45, 100);
+  mirrors.add(mirror);
 }
 
 void mouseReleased() {
@@ -133,11 +140,11 @@ void mouseReleased() {
 }
 
 void mouseMoved() {
-  float deltaY = mouseY - newRay.origin.y;
-  float deltaX = mouseX - newRay.origin.x;
-  newRay.angle = degrees(atan2(deltaY, deltaX));
-  if (newRay.angle < 0) {
-    newRay.angle += 360;
+  float deltaY = mouseY - rays.get(0).origin.y;
+  float deltaX = mouseX - rays.get(0).origin.x;
+  rays.get(0).angle = degrees(atan2(deltaY, deltaX));
+  if (rays.get(0).angle < 0) {
+    rays.get(0).angle += 360;
   }
   
 }
@@ -185,7 +192,7 @@ PVector lineIntersection(float x1, float y1, float x2, float y2, float x3, float
 }
 
 PVector rayIntersection(Ray ray1, Mirror ray2) {
-  return segIntersection( ray1.origin.x, ray1.origin.y, ray1.origin.x + rayDist * cos(radians(ray1.angle)), ray1.origin.y + rayDist * sin(radians(ray1.angle)), ray2.origin.x - ray2.radius * cos(radians(ray2.angle)), ray2.origin.y - ray2.radius * sin(radians(ray2.angle)), ray2.origin.x + ray2.radius * cos(radians(ray2.angle)), ray2.origin.y + ray2.radius * sin(radians(ray2.angle))); 
+  return segIntersection( ray1.origin.x, ray1.origin.y, ray1.origin.x + ray1.distance * cos(radians(ray1.angle)), ray1.origin.y + ray1.distance * sin(radians(ray1.angle)), ray2.origin.x - ray2.radius * cos(radians(ray2.angle)), ray2.origin.y - ray2.radius * sin(radians(ray2.angle)), ray2.origin.x + ray2.radius * cos(radians(ray2.angle)), ray2.origin.y + ray2.radius * sin(radians(ray2.angle))); 
 }
  
  
