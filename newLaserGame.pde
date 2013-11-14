@@ -9,18 +9,18 @@ int rayDist = (int)sqrt((float)(Math.pow(1600,2) + Math.pow(500,2)));
 
 
 class Ray {
-  PVector origin, heading;
-  float angle;
+  PVector origin;
+  float angle, distance;
   Ray( float x1, float y1, float angleInDegrees ){
     origin = new PVector(x1, y1);
-    heading = new PVector(cos(radians(angleInDegrees)), sin(radians(angleInDegrees)));
     angle = angleInDegrees;
+    distance = rayDist;
   }
   
   void draw() {
     pushMatrix();
     translate( this.origin.x, this.origin.y );
-    line(0,0, rayDist*cos(radians(angle)), rayDist*sin(radians(angle)));
+    line(0,0, distance*cos(radians(angle)), distance*sin(radians(angle)));
     pushStyle();
     fill(0);
     text(this.angle, 0, 0  );
@@ -72,8 +72,8 @@ void draw() {
     if (intersection != null) {
       ellipse( intersection.x, intersection.y, 10, 10);
       Ray reflection = new Ray( intersection.x, intersection.y, reflectionAngleInDegrees( newRay, mirrors.get(i), intersection ));
-//    Ray normalAngle = new Ray( intersection.x, intersection.y, bounceRay.angle - PI/2);
-//    normalAngle.draw();
+//      Ray normalAngle = new Ray( intersection.x, intersection.y, mirrors.get(i).angle + 90);
+//      normalAngle.draw();
       pushStyle();
       stroke(255,0,0);
       reflection.draw();
@@ -93,23 +93,39 @@ void draw() {
 
 float reflectionAngleInDegrees( Ray incoming, Ray surface, PVector intersection ) {
 
-  float incidentAngle = incoming.angle;
+  float laserX = incoming.origin.x-intersection.x;
+  float laserY = (incoming.origin.y-intersection.y)*-1;
   
-  float bounceAngle = 180 - incidentAngle - surface.angle;
+  float incidentAngle = degrees(atan(laserY/laserX));
   
   
+  if (laserX < 0) {
+    incidentAngle += 180;
+  }
+  
+  if (laserX - intersection.x >= 0 && laserY < 0) {
+    incidentAngle += 360;
+  }
+  
+  float bounceAngle = 180 - incidentAngle - 2 * surface.angle;
   if (bounceAngle < 0) {
     bounceAngle += 360;
   }
   
-  text("Bounce angle: " + bounceAngle, width/2, height - 20); 
-  return bounceAngle;
+  pushStyle();
+  fill(0);
+  stroke(0);
+  text("Incident angle: " + incidentAngle + " Bounce angle: " + bounceAngle, width/2, height - 20); 
+  popStyle();
+  return -bounceAngle;
 }
 
 void mouseClicked() { 
-  mousePressedPos = new PVector(mouseX, mouseY);
-  Mirror mirror = new Mirror(mouseX, mouseY, 45, 100);
-  mirrors.add(mirror);
+//  mousePressedPos = new PVector(mouseX, mouseY);
+//  Mirror mirror = new Mirror(mouseX, mouseY, 45, 100);
+//  mirrors.add(mirror);
+  newRay.origin.x = mouseX;
+  newRay.origin.y = mouseY;
 }
 
 void mouseReleased() {
@@ -120,6 +136,10 @@ void mouseMoved() {
   float deltaY = mouseY - newRay.origin.y;
   float deltaX = mouseX - newRay.origin.x;
   newRay.angle = degrees(atan2(deltaY, deltaX));
+  if (newRay.angle < 0) {
+    newRay.angle += 360;
+  }
+  
 }
 
 
@@ -134,9 +154,9 @@ void mouseMoved() {
 void mouseWheel(MouseEvent event) {
   float e = event.getAmount();
   mirrors.get(0).angle += e;
-  if (mirrors.get(0).angle >= 360)
+  if (mirrors.get(0).angle >= 180)
     mirrors.get(0).angle -= 360;
-  else if (mirrors.get(0).angle <= 0)
+  else if (mirrors.get(0).angle <= -180)
     mirrors.get(0).angle += 360;
 }
 
