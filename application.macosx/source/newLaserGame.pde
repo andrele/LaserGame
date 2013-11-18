@@ -51,7 +51,7 @@ class Mirror extends Ray {
     if (locked){
       stroke(0, 0, 255);
     } else if (hover) {
-      stroke(50);
+      stroke(0, 255, 0);
     } else {
       stroke(0);
     }
@@ -184,17 +184,17 @@ float reflectionAngleInDegrees( Ray incoming, Ray surface, PVector intersection 
   return -bounceAngle;
 }
 
-void mouseClicked() { 
+void mousePressed() { 
   boolean dragging = false;
   mousePressedPos = new PVector(mouseX, mouseY);
  
   for (Mirror mirror : mirrors) {
-    if (mirror.locked) {
-      mirror.locked = false;
-    } else if (mirror.isHovering(mousePressedPos)){
+    if (mirror.isHovering(mousePressedPos)){
       mirror.mouseOffset = PVector.sub(mousePressedPos, mirror.origin);
       mirror.locked = true;
       dragging = true;
+    } else {
+      mirror.locked = false;
     }
   }
   
@@ -221,13 +221,17 @@ void mouseMoved() {
     rays.get(0).angle += 360;
   }
   
+
+  
+}
+
+void mouseDragged() {
   // Update dragged mirrors
   for (Mirror mirror : mirrors) {
     if (mirror.locked == true) {
       mirror.origin = PVector.sub(mousePosition, mirror.mouseOffset);
     }
   }
-  
 }
 
 
@@ -243,11 +247,13 @@ void mouseWheel(MouseEvent event) {
   float e = event.getAmount();
   
   for (Mirror mirror : mirrors) {
-    mirror.angle += e;
-    if (mirror.angle >= 180)
-      mirror.angle -= 360;
-    else if (mirror.angle <= -180)
-      mirror.angle += 360;
+    if (mirror.isHovering(mousePosition)){
+      mirror.angle += e;
+      if (mirror.angle >= 180)
+        mirror.angle -= 360;
+      else if (mirror.angle <= -180)
+        mirror.angle += 360;
+    }
   }
   
   
