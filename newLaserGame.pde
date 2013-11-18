@@ -6,6 +6,7 @@ ArrayList<Enemy> enemies;
 PVector mousePosition;
 PVector mousePressedPos;
 PVector mouseReleasedPos;
+int enemiesHit, numBounces = 0;
 int screenW = 1600;
 int screenH = 500;
 static int rayDist = (int)sqrt((float)(Math.pow(1600,2) + Math.pow(500,2)));
@@ -157,8 +158,10 @@ void update() {
   int numRays = 1;
   rays.clear();
   rays.add(laser);
+  numBounces = 0;
   
   // Clear all previous hit states
+  enemiesHit = 0;
   for (Enemy enemy : enemies){
     enemy.hit = false;
   }
@@ -187,6 +190,7 @@ void update() {
       Ray reflection = new Ray( closestIntersection.x + cos(radians(bounceAngle)) * 2, closestIntersection.y + sin(radians(bounceAngle)) * 2, bounceAngle);
       rays.add(reflection);
       numRays++;
+      numBounces++;
       ray.distance = dist(ray.origin.x, ray.origin.y, closestIntersection.x, closestIntersection.y)+5;
     } else if ( ray.distance < rayDist ) {
         ray.distance = rayDist;
@@ -197,6 +201,7 @@ void update() {
     for (Enemy enemy : enemies) {
       if (enemy.checkCollision(ray)) {
         enemy.hit = true; 
+        enemiesHit++;
       }
     }  
   }
@@ -229,6 +234,15 @@ void draw() {
   for (Enemy enemy : enemies) {
     enemy.draw();
   }
+  
+  // Draw stats
+    pushStyle();
+  fill(0);
+  stroke(0);
+  textAlign(LEFT);
+  text("Enemies hit: " + enemiesHit + "/" + enemies.size() + " Bounces: " + numBounces, 10, 10); 
+  popStyle();
+
 }
 
 
@@ -261,9 +275,14 @@ float reflectionAngleInDegrees( Ray incoming, Ray surface, PVector intersection 
   return -bounceAngle;
 }
 
-void mouseClicked() {
-  Enemy newEnemy = new Enemy( mouseX, mouseY, 20, 20);
-  enemies.add(newEnemy);
+void keyPressed(){
+  if (key == 'e') {
+    Enemy newEnemy = new Enemy( mouseX, mouseY, 20, 20);
+    enemies.add(newEnemy);
+  } else if (key == 'm') {
+    Mirror mirror = new Mirror(mouseX, mouseY, 45, 100);
+    mirrors.add(mirror);
+  }
 }
 
 void mousePressed() { 
@@ -279,12 +298,6 @@ void mousePressed() {
       mirror.locked = false;
     }
   }
-  
-  if (!dragging) {
-    Mirror mirror = new Mirror(mouseX, mouseY, 45, 100);
-    mirrors.add(mirror);
-  }
-  
 }
 
 void mouseReleased() {
