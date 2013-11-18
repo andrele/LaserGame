@@ -1,6 +1,8 @@
 Ray laser;
+static final int HOVER_DISTANCE = 1;
 ArrayList<Ray> rays;
 ArrayList<Mirror> mirrors;
+PVector mousePosition;
 PVector mousePressedPos;
 PVector mouseReleasedPos;
 int screenW = 1600;
@@ -32,20 +34,50 @@ class Ray {
 
 class Mirror extends Ray {
   float radius;
+  boolean hover,locked;
+  PVector mouseOffset;
   Mirror( float x1, float y1, float angleInDegrees, float size ) {
     super(x1, y1, angleInDegrees);
     radius = size;
+    hover = false;
+    locked = false;
+    mouseOffset = new PVector(0,0);
   } 
   
   void draw() {
     pushMatrix();
+    pushStyle();
+    
+    if (locked){
+      stroke(0, 0, 255);
+    } else if (hover) {
+      stroke(0, 255, 0);
+    } else {
+      stroke(0);
+    }
+    
     translate( this.origin.x, this.origin.y );
     line(-radius*cos(radians(angle)), -radius*sin(radians(angle)), radius*cos(radians(angle)), radius*sin(radians(angle)));
-    pushStyle();
+    
     fill(0);
     text(this.angle, 0, 0  );
     popStyle();
     popMatrix();
+  }
+  
+  boolean isHovering(PVector position) {
+    
+    PVector startPoint = new PVector(origin.x-radius*cos(radians(angle)), origin.y-radius*sin(radians(angle)));
+    PVector endPoint = new PVector(origin.x+radius*cos(radians(angle)), origin.y+radius*sin(radians(angle)));
+    float lineC = distOfPVectors(startPoint, endPoint);
+    float lineA = distOfPVectors(startPoint, position);
+    float lineB = distOfPVectors(endPoint, position);
+    float distance = (lineA + (lineB - lineA)/2)-100;
+    
+    if (distance < HOVER_DISTANCE) {
+      return true;
+    }
+    return false;
   }
 }
 
@@ -53,6 +85,7 @@ class Mirror extends Ray {
 void setup() {
   size( 1600, 500 );
   mousePressedPos = new PVector(0,0);
+  mousePosition = new PVector(mouseX, mouseY);
   mirrors = new ArrayList<Mirror>();
   rays = new ArrayList<Ray>();
   smooth();
@@ -60,8 +93,14 @@ void setup() {
   mirrors.add(new Mirror(1000, 300, 45, 100));
 }
 
+float distOfPVectors( PVector pv1, PVector pv2) {
+  return dist(pv1.x, pv1.y, pv2.x, pv2.y);
+}
+
 void draw() {
   background(255);
+  mousePosition.x = mouseX;
+  mousePosition.y = mouseY;
     
     // Get the initial size of Ray array
     int numRays = 1;
@@ -71,25 +110,31 @@ void draw() {
     // Loop through Ray array
     for (int j=0; j<numRays; j++) {
       Ray ray = rays.get(j);
-      println("Ray loop");
       
-      // Loop through Mirrors array. Find first intersection
+      // Loop through Mirrors array. Find CLOSEST intersection first, then calculate bounce
+      Mirror closestMirror = null;
+      PVector closestIntersection = null;
       for (int i=0; i<mirrors.size(); i++) {
 //        mirrors.get(i).draw();
         PVector intersection = rayIntersection(ray, mirrors.get(i));
         if (intersection != null && intersection != ray.origin ) {
-          ellipse( intersection.x, intersection.y, 10, 10);
-          float bounceAngle = reflectionAngleInDegrees( ray, mirrors.get(i), intersection );
-          Ray reflection = new Ray( intersection.x + cos(radians(bounceAngle)) * 2, intersection.y + sin(radians(bounceAngle)) * 2, bounceAngle);
-          rays.add(reflection);
-          numRays++;
-          println("Mirror loop numRays: " + numRays);
-          ray.distance = dist(ray.origin.x, ray.origin.y, intersection.x, intersection.y)+5;
-          break;
-        } else {
+          if ( closestIntersection == null || distOfPVectors(ray.origin, intersection) < distOfPVectors(ray.origin, closestIntersection)) {
+            closestIntersection = intersection;
+            closestMirror = mirrors.get(i);
+          }
+        }
+      }
+      
+      if (closestIntersection != null && closestMirror != null) {
+        ellipse( closestIntersection.x, closestIntersection.y, 10, 10);
+        float bounceAngle = reflectionAngleInDegrees( ray, closestMirror, closestIntersection );
+        Ray reflection = new Ray( closestIntersection.x + cos(radians(bounceAngle)) * 2, closestIntersection.y + sin(radians(bounceAngle)) * 2, bounceAngle);
+        rays.add(reflection);
+        numRays++;
+        ray.distance = dist(ray.origin.x, ray.origin.y, closestIntersection.x, closestIntersection.y)+5;
+      } else if ( ray.distance < rayDist ) {
           ray.distance = rayDist;
           println("Resetting distance");
-        }
       }
       
     }
@@ -103,11 +148,11 @@ void draw() {
 
 
     for (Mirror mirror : mirrors) {
+      // Test for hovering
+      mirror.hover = mirror.isHovering(mousePosition);
       mirror.draw();
     }
 }
-
-
 
 
 float reflectionAngleInDegrees( Ray incoming, Ray surface, PVector intersection ) {
@@ -139,14 +184,33 @@ float reflectionAngleInDegrees( Ray incoming, Ray surface, PVector intersection 
   return -bounceAngle;
 }
 
-void mouseClicked() { 
+void mousePressed() { 
+  boolean dragging = false;
   mousePressedPos = new PVector(mouseX, mouseY);
-  Mirror mirror = new Mirror(mouseX, mouseY, 45, 100);
-  mirrors.add(mirror);
+ 
+  for (Mirror mirror : mirrors) {
+    if (mirror.isHovering(mousePressedPos)){
+      mirror.mouseOffset = PVector.sub(mousePressedPos, mirror.origin);
+      mirror.locked = true;
+      dragging = true;
+    } else {
+      mirror.locked = false;
+    }
+  }
+  
+  if (!dragging) {
+    Mirror mirror = new Mirror(mouseX, mouseY, 45, 100);
+    mirrors.add(mirror);
+  }
+  
 }
 
 void mouseReleased() {
-
+  
+  for (Mirror mirror : mirrors) {
+    mirror.locked = false;
+  }
+  
 }
 
 void mouseMoved() {
@@ -157,6 +221,17 @@ void mouseMoved() {
     rays.get(0).angle += 360;
   }
   
+
+  
+}
+
+void mouseDragged() {
+  // Update dragged mirrors
+  for (Mirror mirror : mirrors) {
+    if (mirror.locked == true) {
+      mirror.origin = PVector.sub(mousePosition, mirror.mouseOffset);
+    }
+  }
 }
 
 
@@ -170,11 +245,18 @@ void mouseMoved() {
 
 void mouseWheel(MouseEvent event) {
   float e = event.getAmount();
-  mirrors.get(0).angle += e;
-  if (mirrors.get(0).angle >= 180)
-    mirrors.get(0).angle -= 360;
-  else if (mirrors.get(0).angle <= -180)
-    mirrors.get(0).angle += 360;
+  
+  for (Mirror mirror : mirrors) {
+    if (mirror.isHovering(mousePosition)){
+      mirror.angle += e;
+      if (mirror.angle >= 180)
+        mirror.angle -= 360;
+      else if (mirror.angle <= -180)
+        mirror.angle += 360;
+    }
+  }
+  
+  
 }
 
 
