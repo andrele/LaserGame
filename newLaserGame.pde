@@ -1,3 +1,4 @@
+Ray laser;
 ArrayList<Ray> rays;
 ArrayList<Mirror> mirrors;
 PVector mousePressedPos;
@@ -55,38 +56,47 @@ void setup() {
   mirrors = new ArrayList<Mirror>();
   rays = new ArrayList<Ray>();
   smooth();
-  Ray newRay = new Ray(200.0, 200.0, 0);
-  rays.add(newRay);
+  laser = new Ray(200.0, 200.0, 0);
   mirrors.add(new Mirror(1000, 300, 45, 100));
 }
 
 void draw() {
   background(255);
     
-    int numRays = rays.size()-1;
+    // Get the initial size of Ray array
+    int numRays = 1;
+    rays.clear();
+    rays.add(laser);
     
+    // Loop through Ray array
     for (int j=0; j<numRays; j++) {
       Ray ray = rays.get(j);
+      println("Ray loop");
+      
+      // Loop through Mirrors array. Find first intersection
       for (int i=0; i<mirrors.size(); i++) {
 //        mirrors.get(i).draw();
         PVector intersection = rayIntersection(ray, mirrors.get(i));
-        if (intersection != null) {
+        if (intersection != null && intersection != ray.origin ) {
           ellipse( intersection.x, intersection.y, 10, 10);
-          Ray reflection = new Ray( intersection.x, intersection.y, reflectionAngleInDegrees( ray, mirrors.get(i), intersection ));
+          float bounceAngle = reflectionAngleInDegrees( ray, mirrors.get(i), intersection );
+          Ray reflection = new Ray( intersection.x + cos(radians(bounceAngle)) * 2, intersection.y + sin(radians(bounceAngle)) * 2, bounceAngle);
           rays.add(reflection);
           numRays++;
-          ray.distance = dist(ray.origin.x, ray.origin.y, intersection.x, intersection.y);
+          println("Mirror loop numRays: " + numRays);
+          ray.distance = dist(ray.origin.x, ray.origin.y, intersection.x, intersection.y)+5;
+          break;
         } else {
           ray.distance = rayDist;
+          println("Resetting distance");
         }
       }
-
+      
     }
     
     pushStyle();
     stroke(255,0,0);
     for (Ray ray : rays) {
-
       ray.draw();
     }
     popStyle();
