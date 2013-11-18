@@ -1,3 +1,8 @@
+import oscP5.*;
+import netP5.*;
+
+OscP5 oscP5;
+
 Ray laser;
 static final int HOVER_DISTANCE = 1;
 ArrayList<Ray> rays;
@@ -6,6 +11,7 @@ ArrayList<Enemy> enemies;
 PVector mousePosition;
 PVector mousePressedPos;
 PVector mouseReleasedPos;
+boolean followMouse = true;
 int enemiesHit, numBounces = 0;
 int screenW = 1600;
 int screenH = 500;
@@ -101,18 +107,24 @@ class Mirror extends Ray {
   void draw() {
     pushMatrix();
     pushStyle();
-    
+    translate( this.origin.x, this.origin.y );
+
     if (locked){
       stroke(0, 0, 255);
     } else if (hover) {
       stroke(0, 255, 0);
+      pushStyle();
+      noFill();
+      stroke(#92F2FF);
+      strokeWeight(3);
+      ellipse(0,0, 20, 20);
+      popStyle();
     } else {
       stroke(0);
     }
     
-    translate( this.origin.x, this.origin.y );
     line(-radius*cos(radians(angle)), -radius*sin(radians(angle)), radius*cos(radians(angle)), radius*sin(radians(angle)));
-    
+
     fill(0);
     text(this.angle, 0, 0  );
     popStyle();
@@ -137,6 +149,9 @@ class Mirror extends Ray {
 
 
 void setup() {
+  
+  oscP5 = new OscP5(this, "239.0.0.1", 7777);
+  
   size( 1600, 500 );
   ellipseMode(RADIUS);
   mousePressedPos = new PVector(0,0);
@@ -185,7 +200,7 @@ void update() {
     }
     
     if (closestIntersection != null && closestMirror != null) {
-      ellipse( closestIntersection.x, closestIntersection.y, 10, 10);
+      ellipse( closestIntersection.x, closestIntersection.y, 5, 5);
       float bounceAngle = reflectionAngleInDegrees( ray, closestMirror, closestIntersection );
       Ray reflection = new Ray( closestIntersection.x + cos(radians(bounceAngle)) * 2, closestIntersection.y + sin(radians(bounceAngle)) * 2, bounceAngle);
       rays.add(reflection);
@@ -199,7 +214,7 @@ void update() {
     
     // Check for enemy collisions
     for (Enemy enemy : enemies) {
-      if (enemy.checkCollision(ray)) {
+      if (enemy.checkCollision(ray) && !enemy.hit) {
         enemy.hit = true; 
         enemiesHit++;
       }
@@ -236,13 +251,18 @@ void draw() {
   }
   
   // Draw stats
-    pushStyle();
+  pushStyle();
   fill(0);
   stroke(0);
+  textSize(25);
   textAlign(LEFT);
-  text("Enemies hit: " + enemiesHit + "/" + enemies.size() + " Bounces: " + numBounces, 10, 10); 
+  text("Enemies hit: " + enemiesHit + "/" + enemies.size() + " Bounces: " + numBounces, 10, 35);
+  pushStyle();
+  textSize(18);
+  textAlign(CENTER);
+  text("Press E to spawn new Enemy. Press M to spawn new Mirror. Press SPACEBAR to lock Laser.\nClick and drag mirrors to move. MouseWheel to rotate mirrors.", width/2, height - 35);
+  popStyle(); 
   popStyle();
-
 }
 
 
@@ -267,11 +287,11 @@ float reflectionAngleInDegrees( Ray incoming, Ray surface, PVector intersection 
     bounceAngle += 360;
   }
   
-  pushStyle();
-  fill(0);
-  stroke(0);
-  text("Incident angle: " + incidentAngle + " Bounce angle: " + bounceAngle, width/2, height - 20); 
-  popStyle();
+//  pushStyle();
+//  fill(0);
+//  stroke(0);
+//  text("Incident angle: " + incidentAngle + " Bounce angle: " + bounceAngle, width/2, height - 20); 
+//  popStyle();
   return -bounceAngle;
 }
 
@@ -282,6 +302,11 @@ void keyPressed(){
   } else if (key == 'm') {
     Mirror mirror = new Mirror(mouseX, mouseY, 45, 100);
     mirrors.add(mirror);
+  } else if (key == ' ') {
+    if (followMouse)
+      followMouse = false;
+    else
+      followMouse = true;
   }
 }
 
@@ -309,11 +334,14 @@ void mouseReleased() {
 }
 
 void mouseMoved() {
-  float deltaY = mouseY - rays.get(0).origin.y;
-  float deltaX = mouseX - rays.get(0).origin.x;
-  rays.get(0).angle = degrees(atan2(deltaY, deltaX));
-  if (rays.get(0).angle < 0) {
-    rays.get(0).angle += 360;
+  
+  if (followMouse) {
+    float deltaY = mouseY - rays.get(0).origin.y;
+    float deltaX = mouseX - rays.get(0).origin.x;
+    rays.get(0).angle = degrees(atan2(deltaY, deltaX));
+    if (rays.get(0).angle < 0) {
+      rays.get(0).angle += 360;
+    }
   }
   
 
@@ -343,7 +371,7 @@ void mouseWheel(MouseEvent event) {
   float e = event.getAmount();
   
   for (Mirror mirror : mirrors) {
-    if (mirror.isHovering(mousePosition)){
+    if (PVector.dist(mousePosition, mirror.origin) < 20){
       mirror.angle += e;
       if (mirror.angle >= 180)
         mirror.angle -= 360;
@@ -454,53 +482,24 @@ boolean circleLineIntersect(float x1, float y1, float x2, float y2, float cx, fl
 }
 
 
-//// Code adapted from Paul Bourke:
-//// http://local.wasp.uwa.edu.au/~pbourke/geometry/sphereline/raysphere.c
-//boolean circleLineIntersect(float x1, float y1, float x2, float y2, float cx, float cy, float cr ) {
-//  float dx = x2 - x1;
-//  float dy = y2 - y1;
-//  float a = dx * dx + dy * dy;
-//  float b = 2 * (dx * (x1 - cx) + dy * (y1 - cy));
-//  float c = cx * cx + cy * cy;
-//  c += x1 * x1 + y1 * y1;
-//  c -= 2 * (cx * x1 + cy * y1);
-//  c -= cr * cr;
-//  float bb4ac = b * b - 4 * a * c;
-// 
-//  //println(bb4ac);
-// 
-//  if (bb4ac < 0) {  // Not intersecting
-//    return false;
-//  }
-//  else {
-//     
-//    float mu = (-b + sqrt( b*b - 4*a*c )) / (2*a);
-//    float ix1 = x1 + mu*(dx);
-//    float iy1 = y1 + mu*(dy);
-//    mu = (-b - sqrt(b*b - 4*a*c )) / (2*a);
-//    float ix2 = x1 + mu*(dx);
-//    float iy2 = y1 + mu*(dy);
-// 
-//    // The intersection points
-//    //ellipse(ix1, iy1, 10, 10);
-//    //ellipse(ix2, iy2, 10, 10);
-//     
-//    float testX;
-//    float testY;
-//    // Figure out which point is closer to the circle
-//    if (dist(x1, y1, cx, cy) < dist(x2, y2, cx, cy)) {
-//      testX = x2;
-//      testY = y2;
-//    } else {
-//      testX = x1;
-//      testY = y1;
-//    }
-//     
-//    if (dist(testX, testY, ix1, iy1) < dist(x1, y1, x2, y2) || dist(testX, testY, ix2, iy2) < dist(x1, y1, x2, y2)) {
-//      return true;
-//    } else {
-//      return false;
-//    }
-//  }
-//}
-
+// OSC Stuff
+void oscEvent(OscMessage theOscMessage) {
+  // Check for Address Pattern
+  // Check for Type Tag (integer)
+  // Parse values
+  
+  
+  if(theOscMessage.checkAddrPattern("/test")==true) {
+    /* check if the typetag is the right one. */
+    if(theOscMessage.checkTypetag("ifs")) {
+      /* parse theOscMessage and extract the values from the osc message arguments. */
+      int firstValue = theOscMessage.get(0).intValue();  
+      float secondValue = theOscMessage.get(1).floatValue();
+      String thirdValue = theOscMessage.get(2).stringValue();
+      print("### received an osc message /test with typetag ifs.");
+      println(" values: "+firstValue+", "+secondValue+", "+thirdValue);
+      return;
+    }  
+  } 
+  println("### received an osc message. with address pattern "+theOscMessage.addrPattern());
+}
