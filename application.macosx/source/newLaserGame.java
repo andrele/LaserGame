@@ -3,6 +3,11 @@ import processing.data.*;
 import processing.event.*; 
 import processing.opengl.*; 
 
+import oscP5.*; 
+import netP5.*; 
+import java.net.*; 
+import java.util.Enumeration; 
+
 import java.util.HashMap; 
 import java.util.ArrayList; 
 import java.io.File; 
@@ -13,6 +18,27 @@ import java.io.OutputStream;
 import java.io.IOException; 
 
 public class newLaserGame extends PApplet {
+
+// Server stuff
+
+
+
+
+
+OscP5 oscP5;
+NetAddressList myNetAddressList = new NetAddressList();
+NetAddress myBroadcastLocation;
+int listenPort = 32000;
+int broadcastPort = 12000;
+
+String connectPattern = "/server/connect";
+String disconnectPattern = "/server/disconnect";
+
+final static int CONN_UNCONNECTED = 0;
+final static int CONN_SERVER = 1;
+final static int CONN_CLIENT = 2;
+int connectionType = CONN_UNCONNECTED;
+
 
 Ray laser;
 static final int HOVER_DISTANCE = 1;
@@ -28,138 +54,37 @@ int screenW = 1600;
 int screenH = 500;
 static int rayDist = (int)sqrt((float)(Math.pow(1600,2) + Math.pow(500,2)));
 
-class Enemy {
-  PVector origin;
-  float angle, radius;
-  boolean hit;
-  Enemy ( float x, float y, float angleInDegrees, float radius ) {
-    origin = new PVector(x, y);
-    angle = angleInDegrees;
-    this.radius = radius;
-    hit = false;
-  }
-  
-  public void draw() {
-    pushMatrix();
-    pushStyle();
-    translate( origin.x, origin.y );
-    if (hit) {
-      fill(255, 0, 0);
-    } else {
-      fill(255);
+public String getBroadcastAddress() {
+//  java.net.preferIPv4Stack=true;
+  System.setProperty("java.net.preferIP4Stack", "true");
+  try {
+    Enumeration<NetworkInterface> interfaces =
+        NetworkInterface.getNetworkInterfaces();
+    
+    while (interfaces.hasMoreElements()) {
+      NetworkInterface networkInterface = interfaces.nextElement();
+      if (networkInterface.isLoopback())
+        continue;    // Don't want to broadcast to the loopback interface
+      for (InterfaceAddress interfaceAddress :
+               networkInterface.getInterfaceAddresses()) {
+        InetAddress broadcast = interfaceAddress.getBroadcast();
+        if (broadcast == null)
+          continue;
+        // Use the address, but get rid of the leading slash
+        String address = broadcast.toString().substring(1, broadcast.toString().length());
+        return address;
+      }
     }
-    ellipse( 0, 0, radius, radius );
-    line( 0, 0, cos(radians(angle)), sin(radians(angle)));
-    popStyle();
-    popMatrix();
+  } catch (Exception e)  {
+    println(e);
   }
-  
-  public boolean checkCollision(Ray ray) {
-    
-//    For debugging bad collisions
-//    pushStyle();
-//    fill(255,255,0);
-//    ellipse(ray.origin.x, ray.origin.y, 5, 5);
-//    ellipse(ray.endPoint().x, ray.endPoint().y, 5, 5);
-//    ellipse(origin.x, origin.y, 5, 5);
-//    popStyle();
-    
-    return circleLineIntersect(ray.origin.x, ray.origin.y, ray.endPoint().x, ray.endPoint().y, origin.x, origin.y, radius );
-  }
-  
+  return "";
 }
-
-class Ray {
-  PVector origin;
-  float angle, distance;
-  Ray( float x1, float y1, float angleInDegrees ){
-    origin = new PVector(x1, y1);
-    angle = angleInDegrees;
-    distance = rayDist;
-  }
-  
-  public PVector endPoint() {
-    PVector endPoint = new PVector(origin.x + distance*cos(radians(angle)), origin.y + distance*sin(radians(angle)));
-    return endPoint;
-  }
-  
-  public void draw() {
-    pushMatrix();
-    translate( this.origin.x, this.origin.y );
-    line(0,0, distance*cos(radians(angle)), distance*sin(radians(angle)));
-    pushStyle();
-    fill(0);
-    text(this.angle, 0, 0  );
-    popStyle();
-    popMatrix();
-  }
-}
-
-class Mirror extends Ray {
-  float radius;
-  boolean hover,locked;
-  PVector mouseOffset;
-  Mirror( float x1, float y1, float angleInDegrees, float size ) {
-    super(x1, y1, angleInDegrees);
-    radius = size;
-    hover = false;
-    locked = false;
-    mouseOffset = new PVector(0,0);
-  } 
-  
-  public PVector startPoint() {
-    return new PVector(origin.x -radius*cos(radians(angle)),origin.y -radius*sin(radians(angle)));
-  }
-  
-  public PVector endPoint() {
-    return new PVector(origin.x + radius*cos(radians(angle)),origin.y + radius*sin(radians(angle)));
-  }
-  
-  public void draw() {
-    pushMatrix();
-    pushStyle();
-    translate( this.origin.x, this.origin.y );
-
-    if (locked){
-      stroke(0, 0, 255);
-    } else if (hover) {
-      stroke(0, 255, 0);
-      pushStyle();
-      noFill();
-      stroke(0xff92F2FF);
-      strokeWeight(3);
-      ellipse(0,0, 20, 20);
-      popStyle();
-    } else {
-      stroke(0);
-    }
-    
-    line(-radius*cos(radians(angle)), -radius*sin(radians(angle)), radius*cos(radians(angle)), radius*sin(radians(angle)));
-
-    fill(0);
-    text(this.angle, 0, 0  );
-    popStyle();
-    popMatrix();
-  }
-  
-  public boolean isHovering(PVector position) {
-    
-    PVector startPoint = new PVector(origin.x-radius*cos(radians(angle)), origin.y-radius*sin(radians(angle)));
-    PVector endPoint = new PVector(origin.x+radius*cos(radians(angle)), origin.y+radius*sin(radians(angle)));
-    float lineC = distOfPVectors(startPoint, endPoint);
-    float lineA = distOfPVectors(startPoint, position);
-    float lineB = distOfPVectors(endPoint, position);
-    float distance = (lineA + (lineB - lineA)/2)-100;
-    
-    if (distance < HOVER_DISTANCE) {
-      return true;
-    }
-    return false;
-  }
-}
-
 
 public void setup() {
+  oscP5 = new OscP5(this, listenPort);
+  myBroadcastLocation = new NetAddress(getBroadcastAddress(), 32000);
+  
   size( 1600, 500 );
   ellipseMode(RADIUS);
   mousePressedPos = new PVector(0,0);
@@ -222,7 +147,7 @@ public void update() {
     
     // Check for enemy collisions
     for (Enemy enemy : enemies) {
-      if (enemy.checkCollision(ray)) {
+      if (enemy.checkCollision(ray) && !enemy.hit) {
         enemy.hit = true; 
         enemiesHit++;
       }
@@ -264,7 +189,21 @@ public void draw() {
   stroke(0);
   textSize(25);
   textAlign(LEFT);
-  text("Enemies hit: " + enemiesHit + "/" + enemies.size() + " Bounces: " + numBounces, 10, 35);
+  String connectionStatus = "";
+  switch (connectionType) {
+    case CONN_SERVER:
+    connectionStatus = "SERVER";
+    break;
+    
+    case CONN_CLIENT:
+    connectionStatus = "CLIENT";
+    break;
+    
+    default:
+    connectionStatus = "SINGLE PLAYER";
+    break;
+  }
+  text("Enemies hit: " + enemiesHit + "/" + enemies.size() + " Bounces: " + numBounces + " " + connectionStatus , 10, 35);
   pushStyle();
   textSize(18);
   textAlign(CENTER);
@@ -304,17 +243,32 @@ public float reflectionAngleInDegrees( Ray incoming, Ray surface, PVector inters
 }
 
 public void keyPressed(){
-  if (key == 'e') {
-    Enemy newEnemy = new Enemy( mouseX, mouseY, 20, 20);
-    enemies.add(newEnemy);
-  } else if (key == 'm') {
-    Mirror mirror = new Mirror(mouseX, mouseY, 45, 100);
-    mirrors.add(mirror);
-  } else if (key == ' ') {
-    if (followMouse)
-      followMouse = false;
-    else
-      followMouse = true;
+  OscMessage m;
+  switch (key) {
+    case('e'):
+      Enemy newEnemy = new Enemy( mouseX, mouseY, 20, 20);
+      enemies.add(newEnemy);
+      break;
+    case('m'):
+      Mirror mirror = new Mirror(mouseX, mouseY, 45, 100);
+      mirrors.add(mirror);
+      break;
+    case(' '):
+      if (followMouse)
+        followMouse = false;
+      else
+        followMouse = true;
+      break;
+    case('c'):
+      /* connect to the broadcaster */
+      m = new OscMessage("/server/connect",new Object[0]);
+      oscP5.flush(m,myBroadcastLocation);  
+      break;
+    case('d'):
+      /* disconnect from the broadcaster */
+      m = new OscMessage("/server/disconnect",new Object[0]);
+      oscP5.flush(m,myBroadcastLocation);  
+      break;
   }
 }
 
@@ -351,9 +305,6 @@ public void mouseMoved() {
       rays.get(0).angle += 360;
     }
   }
-  
-
-  
 }
 
 public void mouseDragged() {
@@ -387,8 +338,6 @@ public void mouseWheel(MouseEvent event) {
         mirror.angle += 360;
     }
   }
-  
-  
 }
 
 
@@ -487,6 +436,191 @@ public boolean circleLineIntersect(float x1, float y1, float x2, float y2, float
     return true;
   }
   return false;
+}
+
+
+public void oscEvent(OscMessage theOscMessage) {
+  /* check if the address pattern fits any of our patterns */
+  if (theOscMessage.addrPattern().equals(connectPattern)) {
+    connect(theOscMessage.netAddress().address());
+  }
+  else if (theOscMessage.addrPattern().equals(disconnectPattern)) {
+    disconnect(theOscMessage.netAddress().address());
+  } else if (theOscMessage.addrPattern().equals("/server/connected")) {
+    if (connectionType == CONN_UNCONNECTED)
+      connectionType = CONN_CLIENT;
+    println("Switching to broadcast server: " + theOscMessage.netAddress().address());
+    myBroadcastLocation = new NetAddress(theOscMessage.netAddress().address(), 32000);
+  }
+  /**
+   * if pattern matching was not successful, then broadcast the incoming
+   * message to all addresses in the netAddresList. 
+   */
+  else {
+    oscP5.send(theOscMessage, myNetAddressList);
+  }
+}
+
+
+private void connect(String theIPaddress) {
+     if (!myNetAddressList.contains(theIPaddress, broadcastPort)) {
+       myNetAddressList.add(new NetAddress(theIPaddress, broadcastPort));
+       println("### adding "+theIPaddress+" to the list.");
+       // Send connected confirmation back to client
+       OscMessage responseMessage = new OscMessage("/server/connected");
+       responseMessage.add(200);
+       oscP5.send(responseMessage, myNetAddressList.get(myNetAddressList.size()-1));
+       if (connectionType == CONN_UNCONNECTED)
+         connectionType = CONN_SERVER;
+     } else {
+       println("### "+theIPaddress+" is already connected.");
+     }
+     println("### currently there are "+myNetAddressList.list().size()+" remote locations connected.");
+     
+     // Send game setup
+     
+ }
+
+
+private void disconnect(String theIPaddress) {
+if (myNetAddressList.contains(theIPaddress, broadcastPort)) {
+    myNetAddressList.remove(theIPaddress, broadcastPort);
+       println("### removing "+theIPaddress+" from the list.");
+     } else {
+       println("### "+theIPaddress+" is not connected.");
+     }
+       println("### currently there are "+myNetAddressList.list().size());
+       if (myNetAddressList.list().size() <= 0) {
+         connectionType = CONN_UNCONNECTED;
+       }
+ }
+class Enemy {
+  PVector origin;
+  float angle, radius;
+  boolean hit;
+  Enemy ( float x, float y, float angleInDegrees, float radius ) {
+    origin = new PVector(x, y);
+    angle = angleInDegrees;
+    this.radius = radius;
+    hit = false;
+  }
+  
+  public void draw() {
+    pushMatrix();
+    pushStyle();
+    translate( origin.x, origin.y );
+    if (hit) {
+      fill(255, 0, 0);
+    } else {
+      fill(255);
+    }
+    ellipse( 0, 0, radius, radius );
+    line( 0, 0, cos(radians(angle)), sin(radians(angle)));
+    popStyle();
+    popMatrix();
+  }
+  
+  public boolean checkCollision(Ray ray) {
+    
+//    For debugging bad collisions
+//    pushStyle();
+//    fill(255,255,0);
+//    ellipse(ray.origin.x, ray.origin.y, 5, 5);
+//    ellipse(ray.endPoint().x, ray.endPoint().y, 5, 5);
+//    ellipse(origin.x, origin.y, 5, 5);
+//    popStyle();
+    
+    return circleLineIntersect(ray.origin.x, ray.origin.y, ray.endPoint().x, ray.endPoint().y, origin.x, origin.y, radius );
+  }
+  
+}
+class Mirror extends Ray {
+  float radius;
+  boolean hover,locked;
+  PVector mouseOffset;
+  Mirror( float x1, float y1, float angleInDegrees, float size ) {
+    super(x1, y1, angleInDegrees);
+    radius = size;
+    hover = false;
+    locked = false;
+    mouseOffset = new PVector(0,0);
+  } 
+  
+  public PVector startPoint() {
+    return new PVector(origin.x -radius*cos(radians(angle)),origin.y -radius*sin(radians(angle)));
+  }
+  
+  public PVector endPoint() {
+    return new PVector(origin.x + radius*cos(radians(angle)),origin.y + radius*sin(radians(angle)));
+  }
+  
+  public void draw() {
+    pushMatrix();
+    pushStyle();
+    translate( this.origin.x, this.origin.y );
+
+    if (locked){
+      stroke(0, 0, 255);
+    } else if (hover) {
+      stroke(0, 255, 0);
+      pushStyle();
+      noFill();
+      stroke(0xff92F2FF);
+      strokeWeight(3);
+      ellipse(0,0, 20, 20);
+      popStyle();
+    } else {
+      stroke(0);
+    }
+    
+    line(-radius*cos(radians(angle)), -radius*sin(radians(angle)), radius*cos(radians(angle)), radius*sin(radians(angle)));
+
+    fill(0);
+    text(this.angle, 0, 0  );
+    popStyle();
+    popMatrix();
+  }
+  
+  public boolean isHovering(PVector position) {
+    
+    PVector startPoint = new PVector(origin.x-radius*cos(radians(angle)), origin.y-radius*sin(radians(angle)));
+    PVector endPoint = new PVector(origin.x+radius*cos(radians(angle)), origin.y+radius*sin(radians(angle)));
+    float lineC = distOfPVectors(startPoint, endPoint);
+    float lineA = distOfPVectors(startPoint, position);
+    float lineB = distOfPVectors(endPoint, position);
+    float distance = (lineA + (lineB - lineA)/2)-100;
+    
+    if (distance < HOVER_DISTANCE) {
+      return true;
+    }
+    return false;
+  }
+}
+
+class Ray {
+  PVector origin;
+  float angle, distance;
+  Ray( float x1, float y1, float angleInDegrees ){
+    origin = new PVector(x1, y1);
+    angle = angleInDegrees;
+    distance = rayDist;
+  }
+  
+  public PVector endPoint() {
+    PVector endPoint = new PVector(origin.x + distance*cos(radians(angle)), origin.y + distance*sin(radians(angle)));
+    return endPoint;
+  }
+  
+  public void draw() {
+    pushMatrix();
+    translate( this.origin.x, this.origin.y );
+    line(0,0, distance*cos(radians(angle)), distance*sin(radians(angle)));
+    pushStyle();
+    fill(0);
+    text(this.angle, 0, 0  );
+    popStyle();
+    popMatrix();
+  }
 }
   static public void main(String[] passedArgs) {
     String[] appletArgs = new String[] { "newLaserGame" };

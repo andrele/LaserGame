@@ -1,7 +1,23 @@
+// Server stuff
 import oscP5.*;
 import netP5.*;
+import java.net.*;
+import java.util.Enumeration;
 
 OscP5 oscP5;
+NetAddressList myNetAddressList = new NetAddressList();
+NetAddress myBroadcastLocation;
+int listenPort = 32000;
+int broadcastPort = 12000;
+
+String connectPattern = "/server/connect";
+String disconnectPattern = "/server/disconnect";
+
+final static int CONN_UNCONNECTED = 0;
+final static int CONN_SERVER = 1;
+final static int CONN_CLIENT = 2;
+int connectionType = CONN_UNCONNECTED;
+
 
 Ray laser;
 static final int HOVER_DISTANCE = 1;
@@ -17,140 +33,40 @@ int screenW = 1600;
 int screenH = 500;
 static int rayDist = (int)sqrt((float)(Math.pow(1600,2) + Math.pow(500,2)));
 
-class Enemy {
-  PVector origin;
-  float angle, radius;
-  boolean hit;
-  Enemy ( float x, float y, float angleInDegrees, float radius ) {
-    origin = new PVector(x, y);
-    angle = angleInDegrees;
-    this.radius = radius;
-    hit = false;
-  }
+String getBroadcastAddress() {
+  System.setProperty("java.net.preferIP4Stack", "true");
   
-  void draw() {
-    pushMatrix();
-    pushStyle();
-    translate( origin.x, origin.y );
-    if (hit) {
-      fill(255, 0, 0);
-    } else {
-      fill(255);
+  // Try getting broadcast address for en0 first, if not, get the next available adapter's broadcast address
+  
+  try {
+    Enumeration<NetworkInterface> interfaces =
+        NetworkInterface.getNetworkInterfaces();
+            
+    while (interfaces.hasMoreElements()) {
+      NetworkInterface networkInterface = interfaces.nextElement();
+      println(networkInterface.getDisplayName());
+      if (networkInterface.isLoopback() || !networkInterface.getDisplayName().equals("en0"))
+        continue;    // Don't want to broadcast to the loopback interface
+      for (InterfaceAddress interfaceAddress :
+               networkInterface.getInterfaceAddresses()) {
+        InetAddress broadcast = interfaceAddress.getBroadcast();
+        if (broadcast == null)
+          continue;
+        // Use the address, but get rid of the leading slash
+        String address = broadcast.toString().substring(1, broadcast.toString().length());
+        return address;
+      }
     }
-    ellipse( 0, 0, radius, radius );
-    line( 0, 0, cos(radians(angle)), sin(radians(angle)));
-    popStyle();
-    popMatrix();
+  } catch (Exception e)  {
+    println(e);
   }
-  
-  boolean checkCollision(Ray ray) {
-    
-//    For debugging bad collisions
-//    pushStyle();
-//    fill(255,255,0);
-//    ellipse(ray.origin.x, ray.origin.y, 5, 5);
-//    ellipse(ray.endPoint().x, ray.endPoint().y, 5, 5);
-//    ellipse(origin.x, origin.y, 5, 5);
-//    popStyle();
-    
-    return circleLineIntersect(ray.origin.x, ray.origin.y, ray.endPoint().x, ray.endPoint().y, origin.x, origin.y, radius );
-  }
-  
+  return "";
 }
-
-class Ray {
-  PVector origin;
-  float angle, distance;
-  Ray( float x1, float y1, float angleInDegrees ){
-    origin = new PVector(x1, y1);
-    angle = angleInDegrees;
-    distance = rayDist;
-  }
-  
-  PVector endPoint() {
-    PVector endPoint = new PVector(origin.x + distance*cos(radians(angle)), origin.y + distance*sin(radians(angle)));
-    return endPoint;
-  }
-  
-  void draw() {
-    pushMatrix();
-    translate( this.origin.x, this.origin.y );
-    line(0,0, distance*cos(radians(angle)), distance*sin(radians(angle)));
-    pushStyle();
-    fill(0);
-    text(this.angle, 0, 0  );
-    popStyle();
-    popMatrix();
-  }
-}
-
-class Mirror extends Ray {
-  float radius;
-  boolean hover,locked;
-  PVector mouseOffset;
-  Mirror( float x1, float y1, float angleInDegrees, float size ) {
-    super(x1, y1, angleInDegrees);
-    radius = size;
-    hover = false;
-    locked = false;
-    mouseOffset = new PVector(0,0);
-  } 
-  
-  PVector startPoint() {
-    return new PVector(origin.x -radius*cos(radians(angle)),origin.y -radius*sin(radians(angle)));
-  }
-  
-  PVector endPoint() {
-    return new PVector(origin.x + radius*cos(radians(angle)),origin.y + radius*sin(radians(angle)));
-  }
-  
-  void draw() {
-    pushMatrix();
-    pushStyle();
-    translate( this.origin.x, this.origin.y );
-
-    if (locked){
-      stroke(0, 0, 255);
-    } else if (hover) {
-      stroke(0, 255, 0);
-      pushStyle();
-      noFill();
-      stroke(#92F2FF);
-      strokeWeight(3);
-      ellipse(0,0, 20, 20);
-      popStyle();
-    } else {
-      stroke(0);
-    }
-    
-    line(-radius*cos(radians(angle)), -radius*sin(radians(angle)), radius*cos(radians(angle)), radius*sin(radians(angle)));
-
-    fill(0);
-    text(this.angle, 0, 0  );
-    popStyle();
-    popMatrix();
-  }
-  
-  boolean isHovering(PVector position) {
-    
-    PVector startPoint = new PVector(origin.x-radius*cos(radians(angle)), origin.y-radius*sin(radians(angle)));
-    PVector endPoint = new PVector(origin.x+radius*cos(radians(angle)), origin.y+radius*sin(radians(angle)));
-    float lineC = distOfPVectors(startPoint, endPoint);
-    float lineA = distOfPVectors(startPoint, position);
-    float lineB = distOfPVectors(endPoint, position);
-    float distance = (lineA + (lineB - lineA)/2)-100;
-    
-    if (distance < HOVER_DISTANCE) {
-      return true;
-    }
-    return false;
-  }
-}
-
 
 void setup() {
-  
-  oscP5 = new OscP5(this, "239.0.0.1", 7777);
+  oscP5 = new OscP5(this, listenPort);
+  myBroadcastLocation = new NetAddress(getBroadcastAddress(), 32000);
+  println("Broadcast address: " + getBroadcastAddress());
   
   size( 1600, 500 );
   ellipseMode(RADIUS);
@@ -256,7 +172,21 @@ void draw() {
   stroke(0);
   textSize(25);
   textAlign(LEFT);
-  text("Enemies hit: " + enemiesHit + "/" + enemies.size() + " Bounces: " + numBounces, 10, 35);
+  String connectionStatus = "";
+  switch (connectionType) {
+    case CONN_SERVER:
+    connectionStatus = "SERVER";
+    break;
+    
+    case CONN_CLIENT:
+    connectionStatus = "CLIENT";
+    break;
+    
+    default:
+    connectionStatus = "SINGLE PLAYER";
+    break;
+  }
+  text("Enemies hit: " + enemiesHit + "/" + enemies.size() + " Bounces: " + numBounces + " " + connectionStatus , 10, 35);
   pushStyle();
   textSize(18);
   textAlign(CENTER);
@@ -296,17 +226,41 @@ float reflectionAngleInDegrees( Ray incoming, Ray surface, PVector intersection 
 }
 
 void keyPressed(){
-  if (key == 'e') {
-    Enemy newEnemy = new Enemy( mouseX, mouseY, 20, 20);
-    enemies.add(newEnemy);
-  } else if (key == 'm') {
-    Mirror mirror = new Mirror(mouseX, mouseY, 45, 100);
-    mirrors.add(mirror);
-  } else if (key == ' ') {
-    if (followMouse)
-      followMouse = false;
-    else
-      followMouse = true;
+  OscMessage m;
+  switch (key) {
+    case('e'):
+      Enemy newEnemy = new Enemy( mouseX, mouseY, 20, 20);
+      enemies.add(newEnemy);
+      break;
+    case('m'):
+      Mirror mirror = new Mirror(mouseX, mouseY, 45, 100);
+      mirrors.add(mirror);
+      break;
+    case(' '):
+      if (followMouse)
+        followMouse = false;
+      else
+        followMouse = true;
+      break;
+    case('c'):
+      /* connect to the broadcaster */
+      m = new OscMessage("/server/connect",new Object[0]);
+      oscP5.flush(m,myBroadcastLocation);  
+      break;
+    case('d'):
+      /* disconnect from the broadcaster */
+      m = new OscMessage("/server/disconnect",new Object[0]);
+      oscP5.flush(m,myBroadcastLocation);  
+      break;
+    case('h'):
+    if (connectionType == CONN_CLIENT) {
+      println("Please disconnect before entering Host Mode");
+      break;
+    } else {
+      println("Entering Host Mode");
+      connectionType = CONN_SERVER;
+    }
+    break;
   }
 }
 
@@ -343,9 +297,6 @@ void mouseMoved() {
       rays.get(0).angle += 360;
     }
   }
-  
-
-  
 }
 
 void mouseDragged() {
@@ -379,8 +330,6 @@ void mouseWheel(MouseEvent event) {
         mirror.angle += 360;
     }
   }
-  
-  
 }
 
 
@@ -482,24 +431,51 @@ boolean circleLineIntersect(float x1, float y1, float x2, float y2, float cx, fl
 }
 
 
-// OSC Stuff
 void oscEvent(OscMessage theOscMessage) {
-  // Check for Address Pattern
-  // Check for Type Tag (integer)
-  // Parse values
-  
-  
-  if(theOscMessage.checkAddrPattern("/test")==true) {
-    /* check if the typetag is the right one. */
-    if(theOscMessage.checkTypetag("ifs")) {
-      /* parse theOscMessage and extract the values from the osc message arguments. */
-      int firstValue = theOscMessage.get(0).intValue();  
-      float secondValue = theOscMessage.get(1).floatValue();
-      String thirdValue = theOscMessage.get(2).stringValue();
-      print("### received an osc message /test with typetag ifs.");
-      println(" values: "+firstValue+", "+secondValue+", "+thirdValue);
-      return;
-    }  
-  } 
-  println("### received an osc message. with address pattern "+theOscMessage.addrPattern());
+  /* check if the address pattern fits any of our patterns */
+  if (theOscMessage.addrPattern().equals(connectPattern) && connectionType == CONN_SERVER) {
+    connect(theOscMessage.netAddress().address());
+  }
+  else if (theOscMessage.addrPattern().equals(disconnectPattern)) {
+    disconnect(theOscMessage.netAddress().address());
+  } else if (theOscMessage.addrPattern().equals("/server/connected")) {
+    if (connectionType == CONN_UNCONNECTED)
+      connectionType = CONN_CLIENT;
+    println("Switching to broadcast server: " + theOscMessage.netAddress().address());
+    myBroadcastLocation = new NetAddress(theOscMessage.netAddress().address(), 32000);
+  }
+  /**
+   * if pattern matching was not successful, then broadcast the incoming
+   * message to all addresses in the netAddresList. 
+   */
+  else {
+    oscP5.send(theOscMessage, myNetAddressList);
+  }
+}
+
+
+private void connect(String theIPaddress) {
+   if (!myNetAddressList.contains(theIPaddress, broadcastPort)) {
+       myNetAddressList.add(new NetAddress(theIPaddress, broadcastPort));
+       println("### adding "+theIPaddress+" to the list.");
+       // Send connected confirmation back to client
+       OscMessage responseMessage = new OscMessage("/server/connected");
+       responseMessage.add(200);
+       oscP5.send(responseMessage, myNetAddressList.get(myNetAddressList.size()-1));
+     } else {
+       println("### "+theIPaddress+" is already connected.");
+     }
+     println("### currently there are "+myNetAddressList.list().size()+" remote locations connected.");
+     // Send game setup
+}
+
+
+private void disconnect(String theIPaddress) {
+  if (myNetAddressList.contains(theIPaddress, broadcastPort)) {
+    myNetAddressList.remove(theIPaddress, broadcastPort);
+       println("### removing "+theIPaddress+" from the list.");
+     } else {
+       println("### "+theIPaddress+" is not connected.");
+     }
+       println("### currently there are "+myNetAddressList.list().size());
 }
