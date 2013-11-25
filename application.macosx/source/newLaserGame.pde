@@ -88,9 +88,7 @@ void setup() {
   mirrors.add(new Mirror(1000, 300, 45, 100));
 }
 
-float distOfPVectors( PVector pv1, PVector pv2) {
-  return dist(pv1.x, pv1.y, pv2.x, pv2.y);
-}
+
 
 void update() {
   // Get the initial size of Ray array
@@ -426,10 +424,11 @@ private void connect(String theIPaddress) {
     myNetAddressList.add(new NetAddress(theIPaddress, broadcastPort));
     println("### adding "+theIPaddress+" to the list.");
     // Send connected confirmation back to client
+    println("Sending /server/connected to " + myNetAddressList.get(myNetAddressList.size()-1) );
     OscMessage responseMessage = new OscMessage("/server/connected");
     responseMessage.add(200);
     oscP5.send(responseMessage, myNetAddressList.get(myNetAddressList.size()-1));
-    intializeRemoteClient( myNetAddressList.get(myNetAddressList.size()-1) );
+//    intializeRemoteClient( myNetAddressList.get(myNetAddressList.size()-1) );
   } 
   else {
     println("### "+theIPaddress+" is already connected.");

@@ -51,6 +51,10 @@ PVector segIntersection(float x1, float y1, float x2, float y2, float x3, float 
   return new PVector(x1+t*bx, y1+t*by);
 }
 
+float distOfPVectors( PVector pv1, PVector pv2) {
+  return dist(pv1.x, pv1.y, pv2.x, pv2.y);
+}
+
 boolean circleLineIntersect(float x1, float y1, float x2, float y2, float cx, float cy, float cr) {
 
   // Translate everything so that line segment start point to (0, 0)
