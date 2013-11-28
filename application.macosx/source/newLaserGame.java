@@ -289,13 +289,27 @@ public void keyPressed() {
   OscMessage m;
   switch (key) {
     case('e'):
-    Enemy newEnemy = new Enemy( mouseX, mouseY, 20, ENEMY_SIZE);
-    enemies.add(newEnemy);
-    break;
+      if (connectionType == CONN_SERVER) {
+        Enemy newEnemy = new Enemy( mousePosition.x, mousePosition.y, 20, ENEMY_SIZE);
+        enemies.add(newEnemy);
+      }
+      m = new OscMessage(ADDR_NEWENEMY);
+      m.add(mousePosition.x);
+      m.add(mousePosition.y);
+      m.add(45);
+      sendMessage(m);
+      break;
     case('m'):
-    Mirror mirror = new Mirror(mouseX, mouseY, 45, MIRROR_SIZE);
-    mirrors.add(mirror);
-    break;
+      if (connectionType == CONN_SERVER) {
+        Mirror mirror = new Mirror(mousePosition.x, mousePosition.y, 45, MIRROR_SIZE);
+        mirrors.add(mirror);
+      }
+      m = new OscMessage(ADDR_NEWMIRROR);
+      m.add(mousePosition.x);
+      m.add(mousePosition.y);
+      m.add(45.0f);
+      sendMessage(m);
+      break;
     case(' '):
     if (followMouse)
       followMouse = false;
@@ -424,6 +438,12 @@ public void oscEvent(OscMessage theOscMessage) {
         PVector temp = new PVector(theOscMessage.get(1).floatValue(),theOscMessage.get(2).floatValue());
         mirrors.get(theOscMessage.get(0).intValue()).setOrigin(temp);
         temp = null;
+      } else if (theOscMessage.checkAddrPattern(ADDR_NEWENEMY)) {
+        enemies.add(new Enemy( theOscMessage.get(0).floatValue(), theOscMessage.get(1).floatValue(), theOscMessage.get(2).floatValue(), ENEMY_SIZE ));
+        sendMessage(theOscMessage);
+      } else if (theOscMessage.checkAddrPattern(ADDR_NEWMIRROR)) {
+        mirrors.add(new Mirror(theOscMessage.get(0).floatValue(), theOscMessage.get(1).floatValue(), theOscMessage.get(2).floatValue(), MIRROR_SIZE));
+        sendMessage(theOscMessage);
       }
     break;
     
@@ -483,8 +503,10 @@ public void oscEvent(OscMessage theOscMessage) {
 
 public void sendMessage(OscMessage myMessage) {
   if (connectionType == CONN_SERVER) {
+    println("Server: Sending message: " + myMessage.toString());
     oscP5.send(myMessage, myNetAddressList);
   } else if (connectionType == CONN_CLIENT){
+    println("Client: Sending message: " + myMessage.toString());
     oscP5.send(myMessage, myBroadcastLocation);
   }
 }
