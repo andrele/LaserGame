@@ -39,6 +39,7 @@ final static String ADDR_NEWRAY = "/new/ray";
 final static String ADDR_NEWMIRROR = "/new/mirror";
 final static String ADDR_NEWENEMY = "/new/enemy";
 final static String ADDR_MIRRORANGLE = "/mirror/angle/";
+final static String ADDR_MIRRORORIGIN = "/mirror/origin/";
 final static String ADDR_RAYANGLE = "/ray/angle/";
 final static String ADDR_RAYX = "/ray/x/";
 final static String ADDR_RAYY = "/ray/y/";
@@ -364,7 +365,7 @@ public void mouseDragged() {
     // Update dragged mirrors
     for (Mirror mirror : mirrors) {
       if (mirror.locked == true) {
-        mirror.origin = PVector.sub(mousePosition, mirror.mouseOffset);
+        mirror.setOrigin(PVector.sub(mousePosition, mirror.mouseOffset));
       }
     }
   }
@@ -409,18 +410,11 @@ public void oscEvent(OscMessage theOscMessage) {
       else if (theOscMessage.addrPattern().equals(disconnectPattern)) {
         disconnect(theOscMessage.netAddress().address());
       } else if (theOscMessage.checkAddrPattern(ADDR_MIRRORANGLE)) {
-//        // Parse string for id and type
-//        String[] parts = theOscMessage.addrPattern().split("/");
-//        int position = Integer.parseInt(parts[1]);
-//        if (parts[2].contentEquals("angle")) {
-//          mirrors.get(position).setAngle(theOscMessage.get(0).floatValue());
-//        } else if (parts[2].contentEquals("x")) {
-//          mirrors.get(position).setX(theOscMessage.get(0).floatValue());
-//        } else if (parts[2].contentEquals("y")) {
-//          mirrors.get(position).setY(theOscMessage.get(0).floatValue());
-//        }
-        mirrors.get(theOscMessage.get(0).intValue()).angle = theOscMessage.get(1).floatValue();
-
+        mirrors.get(theOscMessage.get(0).intValue()).setAngle(theOscMessage.get(1).floatValue());
+      } else if (theOscMessage.checkAddrPattern(ADDR_MIRRORORIGIN)) {
+        PVector temp = new PVector(theOscMessage.get(1).floatValue(),theOscMessage.get(2).floatValue());
+        mirrors.get(theOscMessage.get(0).intValue()).setOrigin(temp);
+        temp = null;
       }
     break;
     
@@ -450,21 +444,15 @@ public void oscEvent(OscMessage theOscMessage) {
       } else if (theOscMessage.checkAddrPattern(ADDR_RAYANGLE)==true) {
         rays.get(0).angle = theOscMessage.get(0).floatValue();
       } else if (theOscMessage.checkAddrPattern(ADDR_MIRRORANGLE)) {
-        // Parse string for id and type
-//        String[] parts = theOscMessage.addrPattern().split("/");
-//        int position = Integer.parseInt(parts[1]);
-//        if (parts[2].contentEquals("angle")) {
-//          mirrors.get(position).angle = theOscMessage.get(0).floatValue();
-//        } else if (parts[2].contentEquals("x")) {
-//          mirrors.get(position).origin.x = theOscMessage.get(0).floatValue();
-//        } else if (parts[2].contentEquals("y")) {
-//          mirrors.get(position).origin.y = theOscMessage.get(0).floatValue();
-//        }
         mirrors.get(theOscMessage.get(0).intValue()).angle = theOscMessage.get(1).floatValue();
+      } else if (theOscMessage.checkAddrPattern(ADDR_MIRRORORIGIN)) {
+        mirrors.get(theOscMessage.get(0).intValue()).origin.x = theOscMessage.get(1).floatValue();
+        mirrors.get(theOscMessage.get(0).intValue()).origin.y = theOscMessage.get(2).floatValue();
       }
     break;
   }
 
+  
  
   print("### received an osc message.");
   print(" addrpattern: "+theOscMessage.addrPattern());
@@ -774,14 +762,27 @@ class Mirror extends Ray {
   }
  
   public void setAngle(float newAngle) {
-    this.angle = newAngle;
-    int index = mirrors.indexOf(this);
-//    println(address);
     OscMessage myMessage = new OscMessage(ADDR_MIRRORANGLE);
+    int index = mirrors.indexOf(this);
     myMessage.add(index);
     myMessage.add(newAngle);
-    if (connectionType >= CONN_SERVER) {
-      sendMessage(myMessage);
+    sendMessage(myMessage);
+    
+    if (connectionType <= CONN_SERVER) {
+      this.angle = newAngle;
+    }
+  }
+ 
+  public void setOrigin(PVector newOrigin) {
+    OscMessage myMessage = new OscMessage(ADDR_MIRRORORIGIN);
+    int index = mirrors.indexOf(this);
+    myMessage.add(index);
+    myMessage.add(newOrigin.x);
+    myMessage.add(newOrigin.y);
+    sendMessage(myMessage);
+    
+    if (connectionType <= CONN_SERVER) {
+      this.origin = newOrigin;
     }
   } 
 }

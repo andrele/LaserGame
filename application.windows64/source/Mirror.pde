@@ -61,14 +61,27 @@ class Mirror extends Ray {
   }
  
   void setAngle(float newAngle) {
-    this.angle = newAngle;
-    int index = mirrors.indexOf(this);
-//    println(address);
     OscMessage myMessage = new OscMessage(ADDR_MIRRORANGLE);
+    int index = mirrors.indexOf(this);
     myMessage.add(index);
     myMessage.add(newAngle);
-    if (connectionType >= CONN_SERVER) {
-      sendMessage(myMessage);
+    sendMessage(myMessage);
+    
+    if (connectionType <= CONN_SERVER) {
+      this.angle = newAngle;
+    }
+  }
+ 
+  void setOrigin(PVector newOrigin) {
+    OscMessage myMessage = new OscMessage(ADDR_MIRRORORIGIN);
+    int index = mirrors.indexOf(this);
+    myMessage.add(index);
+    myMessage.add(newOrigin.x);
+    myMessage.add(newOrigin.y);
+    sendMessage(myMessage);
+    
+    if (connectionType <= CONN_SERVER) {
+      this.origin = newOrigin;
     }
   } 
 }

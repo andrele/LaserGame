@@ -18,6 +18,7 @@ final static String ADDR_NEWRAY = "/new/ray";
 final static String ADDR_NEWMIRROR = "/new/mirror";
 final static String ADDR_NEWENEMY = "/new/enemy";
 final static String ADDR_MIRRORANGLE = "/mirror/angle/";
+final static String ADDR_MIRRORORIGIN = "/mirror/origin/";
 final static String ADDR_RAYANGLE = "/ray/angle/";
 final static String ADDR_RAYX = "/ray/x/";
 final static String ADDR_RAYY = "/ray/y/";
@@ -343,7 +344,7 @@ void mouseDragged() {
     // Update dragged mirrors
     for (Mirror mirror : mirrors) {
       if (mirror.locked == true) {
-        mirror.origin = PVector.sub(mousePosition, mirror.mouseOffset);
+        mirror.setOrigin(PVector.sub(mousePosition, mirror.mouseOffset));
       }
     }
   }
@@ -388,8 +389,11 @@ void oscEvent(OscMessage theOscMessage) {
       else if (theOscMessage.addrPattern().equals(disconnectPattern)) {
         disconnect(theOscMessage.netAddress().address());
       } else if (theOscMessage.checkAddrPattern(ADDR_MIRRORANGLE)) {
-        mirrors.get(theOscMessage.get(0).intValue()).angle = theOscMessage.get(1).floatValue();
-
+        mirrors.get(theOscMessage.get(0).intValue()).setAngle(theOscMessage.get(1).floatValue());
+      } else if (theOscMessage.checkAddrPattern(ADDR_MIRRORORIGIN)) {
+        PVector temp = new PVector(theOscMessage.get(1).floatValue(),theOscMessage.get(2).floatValue());
+        mirrors.get(theOscMessage.get(0).intValue()).setOrigin(temp);
+        temp = null;
       }
     break;
     
@@ -420,10 +424,14 @@ void oscEvent(OscMessage theOscMessage) {
         rays.get(0).angle = theOscMessage.get(0).floatValue();
       } else if (theOscMessage.checkAddrPattern(ADDR_MIRRORANGLE)) {
         mirrors.get(theOscMessage.get(0).intValue()).angle = theOscMessage.get(1).floatValue();
+      } else if (theOscMessage.checkAddrPattern(ADDR_MIRRORORIGIN)) {
+        mirrors.get(theOscMessage.get(0).intValue()).origin.x = theOscMessage.get(1).floatValue();
+        mirrors.get(theOscMessage.get(0).intValue()).origin.y = theOscMessage.get(2).floatValue();
       }
     break;
   }
 
+  
  
   print("### received an osc message.");
   print(" addrpattern: "+theOscMessage.addrPattern());
