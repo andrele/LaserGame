@@ -30,6 +30,7 @@ final static int CONN_UNCONNECTED = 0;
 final static int CONN_SERVER = 1;
 final static int CONN_CLIENT = 2;
 int connectionType = CONN_UNCONNECTED;
+int clientIndex = 0;
 
 
 Ray laser;
@@ -42,9 +43,10 @@ PVector mousePressedPos;
 PVector mouseReleasedPos;
 boolean followMouse = true;
 int enemiesHit, numBounces = 0;
-int screenW = 1600;
-int screenH = 500;
-static int rayDist = (int)sqrt((float)(Math.pow(1600, 2) + Math.pow(500, 2)));
+static final int screenW = 500;
+static final int screenH = 500;
+static final int rayDist = (int)sqrt((float)(Math.pow(screenW, 2) + Math.pow(screenH, 2)));
+int screenOffsetX = clientIndex * screenW;
 
 String getBroadcastAddress() {
   System.setProperty("java.net.preferIP4Stack", "true");
@@ -88,7 +90,7 @@ void setup() {
   oscP5 = new OscP5(this, broadcastPort);
   println("Broadcast address: " + getBroadcastAddress());
 
-  size( 1600, 500 );
+  size( screenW, screenH );
   ellipseMode(RADIUS);
   mousePressedPos = new PVector(0, 0);
   mousePosition = new PVector(mouseX, mouseY);
@@ -160,12 +162,17 @@ void update() {
 
 void draw() {
   background(255);
-  mousePosition.x = mouseX;
+  mousePosition.x = mouseX + screenOffsetX;
   mousePosition.y = mouseY;
-
+  
   if (!isInitializing) {
     update();
-  
+    
+    // If this is a client, shift everything to the right by clientIndex
+    pushMatrix();
+    if (connectionType == CONN_CLIENT)
+      translate(-screenOffsetX, 0);
+    
     // Draw rays
     pushStyle();
     stroke(255, 0, 0);
@@ -185,6 +192,8 @@ void draw() {
     for (Enemy enemy : enemies) {
       enemy.draw();
     }
+    
+    popMatrix();
   
     // Draw stats
     pushStyle();
@@ -305,7 +314,7 @@ void keyPressed() {
 void mousePressed() {
   if (!isInitializing) { 
     boolean dragging = false;
-    mousePressedPos = new PVector(mouseX, mouseY);
+    mousePressedPos = mousePosition;
     
     for (Mirror mirror : mirrors) {
       if (mirror.isHovering(mousePressedPos)) {
@@ -330,8 +339,8 @@ void mouseReleased() {
 void mouseMoved() {
 
   if (followMouse && !isInitializing) {
-    float deltaY = mouseY - rays.get(0).origin.y;
-    float deltaX = mouseX - rays.get(0).origin.x;
+    float deltaY = mousePosition.y - rays.get(0).origin.y;
+    float deltaX = mousePosition.x - rays.get(0).origin.x;
     rays.get(0).setAngle(degrees(atan2(deltaY, deltaX)));
     if (rays.get(0).angle < 0) {
       rays.get(0).setAngle( rays.get(0).angle += 360 );
@@ -402,6 +411,10 @@ void oscEvent(OscMessage theOscMessage) {
         connectionType = CONN_CLIENT;
         println("Switching to broadcast server: " + theOscMessage.netAddress().address());
         myBroadcastLocation = new NetAddress(theOscMessage.netAddress().address(), listenPort);
+        clientIndex = theOscMessage.get(0).intValue();
+        println("Client index is: " + clientIndex);
+        screenOffsetX = clientIndex * screenW;
+        
       }
     case CONN_CLIENT:
       if (theOscMessage.checkAddrPattern(ADDR_INIT)==true) {
@@ -518,7 +531,7 @@ private void connect(String theIPaddress) {
     // Send connected confirmation back to client
     println("Sending /server/connected to " + myNetAddressList.get(myNetAddressList.size()-1) );
     OscMessage responseMessage = new OscMessage("/server/connected");
-    responseMessage.add(200);
+    responseMessage.add(myNetAddressList.size());
     oscP5.send(responseMessage, myNetAddressList.get(myNetAddressList.size()-1));
     intializeRemoteClient( myNetAddressList.get(myNetAddressList.size()-1) );
   } 
