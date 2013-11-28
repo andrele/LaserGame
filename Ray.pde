@@ -12,6 +12,33 @@ class Ray {
     return endPoint;
   }
   
+  void setAngle(float newAngle) {
+    this.angle = newAngle;
+    if (connectionType >= CONN_SERVER ) { 
+      OscMessage myMessage = new OscMessage(ADDR_RAYANGLE);
+      myMessage.add(newAngle);
+      sendMessage(myMessage);
+    }
+  }
+  
+  void setX(float x) {
+    this.origin.x = x;
+    if (connectionType >= CONN_SERVER) {
+      OscMessage myMessage = new OscMessage(ADDR_RAYX);
+      myMessage.add(x);
+      sendMessage(myMessage);
+    }
+  }
+  
+  void setY(float y) {
+    this.origin.y = y;
+    if (connectionType == CONN_SERVER) {
+      OscMessage myMessage = new OscMessage(ADDR_RAYY);
+      myMessage.add(y);
+      oscP5.send(myMessage, myNetAddressList);
+    }
+  }
+    
   void draw() {
     pushMatrix();
     translate( this.origin.x, this.origin.y );

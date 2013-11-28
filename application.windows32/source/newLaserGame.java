@@ -31,8 +31,20 @@ NetAddress myBroadcastLocation;
 int listenPort = 32000;
 int broadcastPort = 12000;
 
-String connectPattern = "/server/connect";
-String disconnectPattern = "/server/disconnect";
+final static String connectPattern = "/server/connect";
+final static String disconnectPattern = "/server/disconnect";
+final static String ADDR_INIT = "/initialize/begin";
+final static String ADDR_INITDONE = "/initialize/end";
+final static String ADDR_NEWRAY = "/new/ray";
+final static String ADDR_NEWMIRROR = "/new/mirror";
+final static String ADDR_NEWENEMY = "/new/enemy";
+final static String ADDR_MIRRORANGLE = "/mirror/angle/";
+final static String ADDR_RAYANGLE = "/ray/angle/";
+final static String ADDR_RAYX = "/ray/x/";
+final static String ADDR_RAYY = "/ray/y/";
+final static int MIRROR_SIZE = 100;
+final static int ENEMY_SIZE = 20;
+boolean isInitializing = false;
 
 final static int CONN_UNCONNECTED = 0;
 final static int CONN_SERVER = 1;
@@ -91,10 +103,10 @@ public void setup() {
   // Start all instances to Client by default
   //  oscP5 = new OscP5(this, listenPort); // Server setup
   // Commented out for debugging
-  //  myBroadcastLocation = new NetAddress(getBroadcastAddress(), 32000);
+//  myBroadcastLocation = new NetAddress(getBroadcastAddress(), listenPort);
   myBroadcastLocation = new NetAddress("127.0.0.1", listenPort);
   oscP5 = new OscP5(this, broadcastPort);
-  //  println("Broadcast address: " + getBroadcastAddress());
+  println("Broadcast address: " + getBroadcastAddress());
 
   size( 1600, 500 );
   ellipseMode(RADIUS);
@@ -106,7 +118,7 @@ public void setup() {
   fill(0);
   smooth();
   laser = new Ray(200.0f, 200.0f, 0);
-  mirrors.add(new Mirror(1000, 300, 45, 100));
+  mirrors.add(new Mirror(1000, 300, 45, MIRROR_SIZE));
 }
 
 
@@ -171,63 +183,65 @@ public void draw() {
   mousePosition.x = mouseX;
   mousePosition.y = mouseY;
 
-  update();
-
-  // Draw rays
-  pushStyle();
-  stroke(255, 0, 0);
-  for (Ray ray : rays) {
-    ray.draw();
-  }
-  popStyle();
-
-  // Draw mirrors
-  for (Mirror mirror : mirrors) {
-    // Test for hovering
-    mirror.hover = mirror.isHovering(mousePosition);
-    mirror.draw();
-  }
-
-  // Draw enemies
-  for (Enemy enemy : enemies) {
-    enemy.draw();
-  }
-
-  // Draw stats
-  pushStyle();
-  fill(0);
-  stroke(0);
-  textSize(25);
-  textAlign(LEFT);
-  String connectionStatus = "";
-  switch (connectionType) {
-  case CONN_SERVER:
-    connectionStatus = "SERVER";
-    break;
-
-  case CONN_CLIENT:
-    connectionStatus = "CLIENT";
-    break;
-
-  default:
-    connectionStatus = "SINGLE PLAYER";
-    break;
-  }
-
-  if (connectionType == CONN_CLIENT) {
-    connectionStatus += " (" + myBroadcastLocation.address() + ")";
-  }
-  text("Enemies hit: " + enemiesHit + "/" + enemies.size() + " Bounces: " + numBounces + " " + connectionStatus, 10, 35);
-  pushStyle();
-  textSize(18);
-  textAlign(CENTER);
-  text("Press E to spawn new Enemy. Press M to spawn new Mirror. Press SPACEBAR to lock Laser.\nClick and drag mirrors to move. MouseWheel to rotate mirrors.", width/2, height - 35);
-  popStyle(); 
-  popStyle();
-
-  // Draw connected clients
-  for (int i = 0; i < myNetAddressList.size(); i++) {
-    text(myNetAddressList.get(i).address(), 10, (10*i)+10);
+  if (!isInitializing) {
+    update();
+  
+    // Draw rays
+    pushStyle();
+    stroke(255, 0, 0);
+    for (Ray ray : rays) {
+      ray.draw();
+    }
+    popStyle();
+  
+    // Draw mirrors
+    for (Mirror mirror : mirrors) {
+      // Test for hovering
+      mirror.hover = mirror.isHovering(mousePosition);
+      mirror.draw();
+    }
+  
+    // Draw enemies
+    for (Enemy enemy : enemies) {
+      enemy.draw();
+    }
+  
+    // Draw stats
+    pushStyle();
+    fill(0);
+    stroke(0);
+    textSize(25);
+    textAlign(LEFT);
+    String connectionStatus = "";
+    switch (connectionType) {
+    case CONN_SERVER:
+      connectionStatus = "SERVER";
+      break;
+  
+    case CONN_CLIENT:
+      connectionStatus = "CLIENT";
+      break;
+  
+    default:
+      connectionStatus = "SINGLE PLAYER";
+      break;
+    }
+  
+    if (connectionType == CONN_CLIENT) {
+      connectionStatus += " (" + myBroadcastLocation.address() + ")";
+    }
+    text("Enemies hit: " + enemiesHit + "/" + enemies.size() + " Bounces: " + numBounces + " " + connectionStatus, 10, 35);
+    pushStyle();
+    textSize(18);
+    textAlign(CENTER);
+    text("Press E to spawn new Enemy. Press M to spawn new Mirror. Press SPACEBAR to lock Laser.\nClick and drag mirrors to move. MouseWheel to rotate mirrors.", width/2, height - 35);
+    popStyle(); 
+    popStyle();
+  
+    // Draw connected clients
+    for (int i = 0; i < myNetAddressList.size(); i++) {
+      text(myNetAddressList.get(i).address(), 10, (10*i)+10);
+    }
   }
 }
 
@@ -265,11 +279,11 @@ public void keyPressed() {
   OscMessage m;
   switch (key) {
     case('e'):
-    Enemy newEnemy = new Enemy( mouseX, mouseY, 20, 20);
+    Enemy newEnemy = new Enemy( mouseX, mouseY, 20, ENEMY_SIZE);
     enemies.add(newEnemy);
     break;
     case('m'):
-    Mirror mirror = new Mirror(mouseX, mouseY, 45, 100);
+    Mirror mirror = new Mirror(mouseX, mouseY, 45, MIRROR_SIZE);
     mirrors.add(mirror);
     break;
     case(' '):
@@ -279,46 +293,49 @@ public void keyPressed() {
       followMouse = true;
     break;
     case('c'):
-    /* connect to the broadcaster */
-    println("Sending connection packet to " + myBroadcastLocation.address());
-    m = new OscMessage("/server/connect", new Object[0]);
-    oscP5.flush(m, myBroadcastLocation);  
-    break;
+      /* connect to the broadcaster */
+      println("Sending connection packet to " + myBroadcastLocation.address());
+      m = new OscMessage("/server/connect", new Object[0]);
+      oscP5.flush(m, myBroadcastLocation);  
+      break;
     case('d'):
-    /* disconnect from the broadcaster */
-    println("Sending disconnection packet to " + myBroadcastLocation.address());
-    m = new OscMessage("/server/disconnect", new Object[0]);
-    oscP5.flush(m, myBroadcastLocation);  
-    break;
-    case('h'):
-    if (connectionType != CONN_SERVER) {
-      println("Entering Host Mode");
-      connectionType = CONN_SERVER;
-      oscP5.stop();
-      oscP5 = new OscP5(this, listenPort);
-    } 
-    else {
-      println("Entering Client Mode");
+      /* disconnect from the broadcaster */
+      println("Sending disconnection packet to " + myBroadcastLocation.address());
+      m = new OscMessage("/server/disconnect", new Object[0]);
+      oscP5.flush(m, myBroadcastLocation);  
       connectionType = CONN_UNCONNECTED;
-      oscP5.stop();
-      oscP5 = new OscP5(this, broadcastPort);
-    }
-    break;
+      break;
+    case('h'):
+      if (connectionType != CONN_SERVER) {
+        println("Entering Host Mode");
+        connectionType = CONN_SERVER;
+        oscP5.stop();
+        oscP5 = new OscP5(this, listenPort);
+      } 
+      else {
+        println("Entering Client Mode");
+        connectionType = CONN_UNCONNECTED;
+        oscP5.stop();
+        oscP5 = new OscP5(this, broadcastPort);
+      }
+      break;
   }
 }
 
-public void mousePressed() { 
-  boolean dragging = false;
-  mousePressedPos = new PVector(mouseX, mouseY);
-
-  for (Mirror mirror : mirrors) {
-    if (mirror.isHovering(mousePressedPos)) {
-      mirror.mouseOffset = PVector.sub(mousePressedPos, mirror.origin);
-      mirror.locked = true;
-      dragging = true;
-    } 
-    else {
-      mirror.locked = false;
+public void mousePressed() {
+  if (!isInitializing) { 
+    boolean dragging = false;
+    mousePressedPos = new PVector(mouseX, mouseY);
+    
+    for (Mirror mirror : mirrors) {
+      if (mirror.isHovering(mousePressedPos)) {
+        mirror.mouseOffset = PVector.sub(mousePressedPos, mirror.origin);
+        mirror.locked = true;
+        dragging = true;
+      } 
+      else {
+        mirror.locked = false;
+      }
     }
   }
 }
@@ -332,21 +349,23 @@ public void mouseReleased() {
 
 public void mouseMoved() {
 
-  if (followMouse) {
+  if (followMouse && !isInitializing) {
     float deltaY = mouseY - rays.get(0).origin.y;
     float deltaX = mouseX - rays.get(0).origin.x;
-    rays.get(0).angle = degrees(atan2(deltaY, deltaX));
+    rays.get(0).setAngle(degrees(atan2(deltaY, deltaX)));
     if (rays.get(0).angle < 0) {
-      rays.get(0).angle += 360;
+      rays.get(0).setAngle( rays.get(0).angle += 360 );
     }
   }
 }
 
 public void mouseDragged() {
-  // Update dragged mirrors
-  for (Mirror mirror : mirrors) {
-    if (mirror.locked == true) {
-      mirror.origin = PVector.sub(mousePosition, mirror.mouseOffset);
+  if (!isInitializing) {
+    // Update dragged mirrors
+    for (Mirror mirror : mirrors) {
+      if (mirror.locked == true) {
+        mirror.origin = PVector.sub(mousePosition, mirror.mouseOffset);
+      }
     }
   }
 }
@@ -360,15 +379,21 @@ public void mouseDragged() {
 //}
 
 public void mouseWheel(MouseEvent event) {
-  float e = event.getAmount();
+  if (!isInitializing) {
+    float e = event.getAmount();
+  
+    for (Mirror mirror : mirrors) {
+      if (PVector.dist(mousePosition, mirror.origin) < 20) {
+        float angle = mirror.angle + e;
+        
+        if (angle >= 180)
+          angle -= 360;
+        else if (angle <= -180)
+          angle += 360;
+          
+        mirror.setAngle(angle);
 
-  for (Mirror mirror : mirrors) {
-    if (PVector.dist(mousePosition, mirror.origin) < 20) {
-      mirror.angle += e;
-      if (mirror.angle >= 180)
-        mirror.angle -= 360;
-      else if (mirror.angle <= -180)
-        mirror.angle += 360;
+      }
     }
   }
 }
@@ -376,24 +401,90 @@ public void mouseWheel(MouseEvent event) {
 
 public void oscEvent(OscMessage theOscMessage) {
   /* check if the address pattern fits any of our patterns */
-  if (theOscMessage.addrPattern().equals(connectPattern) && connectionType == CONN_SERVER) {
-    connect(theOscMessage.netAddress().address());
+  switch (connectionType) {
+    case CONN_SERVER:
+      if (theOscMessage.addrPattern().equals(connectPattern)) {
+        connect(theOscMessage.netAddress().address());
+      }
+      else if (theOscMessage.addrPattern().equals(disconnectPattern)) {
+        disconnect(theOscMessage.netAddress().address());
+      } else if (theOscMessage.checkAddrPattern(ADDR_MIRRORANGLE)) {
+//        // Parse string for id and type
+//        String[] parts = theOscMessage.addrPattern().split("/");
+//        int position = Integer.parseInt(parts[1]);
+//        if (parts[2].contentEquals("angle")) {
+//          mirrors.get(position).setAngle(theOscMessage.get(0).floatValue());
+//        } else if (parts[2].contentEquals("x")) {
+//          mirrors.get(position).setX(theOscMessage.get(0).floatValue());
+//        } else if (parts[2].contentEquals("y")) {
+//          mirrors.get(position).setY(theOscMessage.get(0).floatValue());
+//        }
+        mirrors.get(theOscMessage.get(0).intValue()).angle = theOscMessage.get(1).floatValue();
+
+      }
+    break;
+    
+    case CONN_UNCONNECTED:
+      if (theOscMessage.addrPattern().equals("/server/connected")) {
+        connectionType = CONN_CLIENT;
+        println("Switching to broadcast server: " + theOscMessage.netAddress().address());
+        myBroadcastLocation = new NetAddress(theOscMessage.netAddress().address(), listenPort);
+      }
+    case CONN_CLIENT:
+      if (theOscMessage.checkAddrPattern(ADDR_INIT)==true) {
+        // Set initialization boolean to lock system from concurrent modification
+        isInitializing = true;
+        mirrors.clear();
+        enemies.clear();
+        followMouse = false;
+      } else if (theOscMessage.checkAddrPattern(ADDR_INITDONE)==true) {
+        isInitializing = false;
+      } else if (theOscMessage.checkAddrPattern(ADDR_NEWRAY)==true) {
+        rays.get(0).origin.x = theOscMessage.get(0).floatValue();
+        rays.get(0).origin.y = theOscMessage.get(1).floatValue();
+        rays.get(0).angle = theOscMessage.get(2).floatValue();
+      } else if (theOscMessage.checkAddrPattern(ADDR_NEWMIRROR)==true) {
+        mirrors.add(new Mirror(theOscMessage.get(0).floatValue(), theOscMessage.get(1).floatValue(), theOscMessage.get(2).floatValue(), MIRROR_SIZE));
+      } else if (theOscMessage.checkAddrPattern(ADDR_NEWENEMY)==true) {
+        enemies.add(new Enemy(theOscMessage.get(0).floatValue(), theOscMessage.get(1).floatValue(), theOscMessage.get(2).floatValue(), ENEMY_SIZE));
+      } else if (theOscMessage.checkAddrPattern(ADDR_RAYANGLE)==true) {
+        rays.get(0).angle = theOscMessage.get(0).floatValue();
+      } else if (theOscMessage.checkAddrPattern(ADDR_MIRRORANGLE)) {
+        // Parse string for id and type
+//        String[] parts = theOscMessage.addrPattern().split("/");
+//        int position = Integer.parseInt(parts[1]);
+//        if (parts[2].contentEquals("angle")) {
+//          mirrors.get(position).angle = theOscMessage.get(0).floatValue();
+//        } else if (parts[2].contentEquals("x")) {
+//          mirrors.get(position).origin.x = theOscMessage.get(0).floatValue();
+//        } else if (parts[2].contentEquals("y")) {
+//          mirrors.get(position).origin.y = theOscMessage.get(0).floatValue();
+//        }
+        mirrors.get(theOscMessage.get(0).intValue()).angle = theOscMessage.get(1).floatValue();
+      }
+    break;
   }
-  else if (theOscMessage.addrPattern().equals(disconnectPattern)) {
-    disconnect(theOscMessage.netAddress().address());
-  } 
-  else if (theOscMessage.addrPattern().equals("/server/connected")) {
-    if (connectionType == CONN_UNCONNECTED)
-      connectionType = CONN_CLIENT;
-    println("Switching to broadcast server: " + theOscMessage.netAddress().address());
-    myBroadcastLocation = new NetAddress(theOscMessage.netAddress().address(), listenPort);
-  }
+
+ 
+  print("### received an osc message.");
+  print(" addrpattern: "+theOscMessage.addrPattern());
+  println(" typetag: "+theOscMessage.typetag());
+  println(" values: " + theOscMessage.toString());
+  println(" timetag: "+theOscMessage.timetag());
+ 
   /**
    * if pattern matching was not successful, then broadcast the incoming
    * message to all addresses in the netAddresList. 
    */
-  else {
     //    oscP5.send(theOscMessage, myNetAddressList);
+
+}
+
+public void sendMessage(OscMessage myMessage) {
+  if (connectionType == CONN_SERVER) {
+    oscP5.send(myMessage, myNetAddressList);
+  } else if (connectionType == CONN_CLIENT){
+    oscP5.send(myMessage, myBroadcastLocation);
   }
 }
 
@@ -401,7 +492,7 @@ private void intializeRemoteClient( NetAddress client ) {
   OscBundle bundle = new OscBundle();
   
   /* createa new osc message object */
-  OscMessage myMessage = new OscMessage("/initialize");
+  OscMessage myMessage = new OscMessage(ADDR_INIT);
   myMessage.add(100);
   
   /* add an osc message to the osc bundle */
@@ -410,7 +501,7 @@ private void intializeRemoteClient( NetAddress client ) {
   /* Add initial laser */
   myMessage.clear();
   Ray laser = rays.get(0);
-  myMessage.setAddrPattern("/new/ray");
+  myMessage.setAddrPattern(ADDR_NEWRAY);
   myMessage.add(laser.origin.x);
   myMessage.add(laser.origin.y);
   myMessage.add(laser.angle);
@@ -418,11 +509,24 @@ private void intializeRemoteClient( NetAddress client ) {
   
   
   /* Add all mirrors */
+  
   for (Mirror mirror : mirrors) {
+    myMessage.clear();
+    myMessage.setAddrPattern(ADDR_NEWMIRROR);
+    myMessage.add(mirror.origin.x);
+    myMessage.add(mirror.origin.y);
+    myMessage.add(mirror.angle);
+    bundle.add(myMessage);
   }
 
   /* Add all enemies */
   for (Enemy enemy : enemies) {
+    myMessage.clear();
+    myMessage.setAddrPattern(ADDR_NEWENEMY);
+    myMessage.add(enemy.origin.x);
+    myMessage.add(enemy.origin.y);
+    myMessage.add(enemy.angle);
+    bundle.add(myMessage);
   }
   
   /* Add game parameters */
@@ -430,9 +534,9 @@ private void intializeRemoteClient( NetAddress client ) {
   /* reset and clear the myMessage object for refill. */
   myMessage.clear();
   
-  /* refill the osc message object again */
-  myMessage.setAddrPattern("/test2");
-  myMessage.add("defg");
+  /* send end initializtion message */
+  myMessage.setAddrPattern(ADDR_INITDONE);
+  myMessage.add(200);
   bundle.add(myMessage);
   
   bundle.setTimetag(bundle.now() + 10000);
@@ -449,7 +553,7 @@ private void connect(String theIPaddress) {
     OscMessage responseMessage = new OscMessage("/server/connected");
     responseMessage.add(200);
     oscP5.send(responseMessage, myNetAddressList.get(myNetAddressList.size()-1));
-//    intializeRemoteClient( myNetAddressList.get(myNetAddressList.size()-1) );
+    intializeRemoteClient( myNetAddressList.get(myNetAddressList.size()-1) );
   } 
   else {
     println("### "+theIPaddress+" is already connected.");
@@ -668,6 +772,18 @@ class Mirror extends Ray {
     }
     return false;
   }
+ 
+  public void setAngle(float newAngle) {
+    this.angle = newAngle;
+    int index = mirrors.indexOf(this);
+//    println(address);
+    OscMessage myMessage = new OscMessage(ADDR_MIRRORANGLE);
+    myMessage.add(index);
+    myMessage.add(newAngle);
+    if (connectionType >= CONN_SERVER) {
+      sendMessage(myMessage);
+    }
+  } 
 }
 
 class Ray {
@@ -684,6 +800,33 @@ class Ray {
     return endPoint;
   }
   
+  public void setAngle(float newAngle) {
+    this.angle = newAngle;
+    if (connectionType >= CONN_SERVER ) { 
+      OscMessage myMessage = new OscMessage(ADDR_RAYANGLE);
+      myMessage.add(newAngle);
+      sendMessage(myMessage);
+    }
+  }
+  
+  public void setX(float x) {
+    this.origin.x = x;
+    if (connectionType >= CONN_SERVER) {
+      OscMessage myMessage = new OscMessage(ADDR_RAYX);
+      myMessage.add(x);
+      sendMessage(myMessage);
+    }
+  }
+  
+  public void setY(float y) {
+    this.origin.y = y;
+    if (connectionType == CONN_SERVER) {
+      OscMessage myMessage = new OscMessage(ADDR_RAYY);
+      myMessage.add(y);
+      oscP5.send(myMessage, myNetAddressList);
+    }
+  }
+    
   public void draw() {
     pushMatrix();
     translate( this.origin.x, this.origin.y );
