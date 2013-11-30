@@ -278,7 +278,7 @@ void keyPressed() {
       m = new OscMessage(ADDR_NEWENEMY);
       m.add(mousePosition.x);
       m.add(mousePosition.y);
-      m.add(45);
+      m.add(20.0f);
       sendMessage(m);
       break;
     case('m'):

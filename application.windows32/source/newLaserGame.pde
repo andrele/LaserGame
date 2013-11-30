@@ -137,7 +137,10 @@ void update() {
     }
 
     if (closestIntersection != null && closestMirror != null) {
+      pushMatrix();
+      translate(-screenOffsetX, 0);
       ellipse( closestIntersection.x, closestIntersection.y, 5, 5);
+      popMatrix();
       float bounceAngle = reflectionAngleInDegrees( ray, closestMirror, closestIntersection );
       Ray reflection = new Ray( closestIntersection.x + cos(radians(bounceAngle)) * 2, closestIntersection.y + sin(radians(bounceAngle)) * 2, bounceAngle);
       rays.add(reflection);
@@ -275,7 +278,7 @@ void keyPressed() {
       m = new OscMessage(ADDR_NEWENEMY);
       m.add(mousePosition.x);
       m.add(mousePosition.y);
-      m.add(45);
+      m.add(20.0f);
       sendMessage(m);
       break;
     case('m'):
