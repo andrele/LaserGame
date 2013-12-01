@@ -22,6 +22,8 @@ final static String ADDR_MIRRORORIGIN = "/mirror/origin/";
 final static String ADDR_RAYANGLE = "/ray/angle/";
 final static String ADDR_RAYX = "/ray/x/";
 final static String ADDR_RAYY = "/ray/y/";
+final static String ADDR_SERVERPREFIX = "/server";
+final static String ADDR_CLIENTPREFIX = "/client";
 final static int MIRROR_SIZE = 100;
 final static int ENEMY_SIZE = 20;
 boolean isInitializing = false;
@@ -109,16 +111,16 @@ void setup() {
   mirrors.add(new Mirror(1000, 300, 45, MIRROR_SIZE));
 
   bloom = loadShader("blur.glsl");
-  
+
   blur = loadShader("blur2.glsl");
   blur.set("blurSize", 9);
   blur.set("sigma", 5.0f);  
-  
+
   src = createGraphics(width, height, P2D); 
-  
+
   pass1 = createGraphics(width, height, P2D);
   pass1.noSmooth();  
-  
+
   pass2 = createGraphics(width, height, P2D);
   pass2.noSmooth();
 }
@@ -160,7 +162,7 @@ void update() {
       src.pushMatrix();
       src.pushStyle();
       src.translate(-screenOffsetX, 0);
-      src.fill(255,10,10);
+      src.fill(255, 10, 10);
       src.ellipse( closestIntersection.x, closestIntersection.y, 10, 10);
       src.popStyle();
       src.popMatrix();
@@ -187,12 +189,13 @@ void update() {
 }
 
 void draw() {
-  src.beginDraw();
-  src.background(0);
-  mousePosition.x = mouseX + screenOffsetX;
-  mousePosition.y = mouseY;
 
   if (!isInitializing) {
+    src.beginDraw();
+    src.background(0);
+    mousePosition.x = mouseX + screenOffsetX;
+    mousePosition.y = mouseY;
+
     update();
 
     // If this is a client, shift everything to the right by clientIndex
@@ -220,27 +223,27 @@ void draw() {
       enemy.draw();
     }
 
-//    filter(bloom);
+    //    filter(bloom);
 
     src.popMatrix();
-    
+
     src.endDraw();
-    
+
     // Applying the blur shader along the vertical direction   
     blur.set("horizontalPass", 0);
     pass1.beginDraw();            
     pass1.shader(blur);  
     pass1.image(src, 0, 0);
     pass1.endDraw();
-    
+
     // Applying the blur shader along the horizontal direction      
     blur.set("horizontalPass", 1);
     pass2.beginDraw();            
     pass2.shader(blur);  
     pass2.image(pass1, 0, 0);
     pass2.endDraw();    
-        
-  image(pass2, 0, 0); 
+
+    image(pass2, 0, 0); 
 
     // Draw stats
     pushStyle();
@@ -370,20 +373,23 @@ void keyPressed() {
     }
     break;
   }
-  
-    if (key == '9') {
+
+  if (key == '9') {
     blur.set("blurSize", 9);
     blur.set("sigma", 5.0);
-  } else if (key == '7') {
+  } 
+  else if (key == '7') {
     blur.set("blurSize", 7);
     blur.set("sigma", 3.0);
-  } else if (key == '5') {
-    blur.set("blurSize", 5);
-    blur.set("sigma", 2.0);  
-  } else if (key == '3') {
-    blur.set("blurSize", 5);
-    blur.set("sigma", 1.0);  
   } 
+  else if (key == '5') {
+    blur.set("blurSize", 5);
+    blur.set("sigma", 2.0);
+  } 
+  else if (key == '3') {
+    blur.set("blurSize", 5);
+    blur.set("sigma", 1.0);
+  }
 }
 
 void mousePressed() {
@@ -472,19 +478,19 @@ void oscEvent(OscMessage theOscMessage) {
     else if (theOscMessage.addrPattern().equals(disconnectPattern)) {
       disconnect(theOscMessage.netAddress().address());
     } 
-    else if (theOscMessage.checkAddrPattern(ADDR_MIRRORANGLE)) {
+    else if (theOscMessage.checkAddrPattern(ADDR_CLIENTPREFIX + ADDR_MIRRORANGLE)) {
       mirrors.get(theOscMessage.get(0).intValue()).setAngle(theOscMessage.get(1).floatValue());
     } 
-    else if (theOscMessage.checkAddrPattern(ADDR_MIRRORORIGIN)) {
+    else if (theOscMessage.checkAddrPattern(ADDR_CLIENTPREFIX + ADDR_MIRRORORIGIN)) {
       PVector temp = new PVector(theOscMessage.get(1).floatValue(), theOscMessage.get(2).floatValue());
       mirrors.get(theOscMessage.get(0).intValue()).setOrigin(temp);
       temp = null;
     } 
-    else if (theOscMessage.checkAddrPattern(ADDR_NEWENEMY)) {
+    else if (theOscMessage.checkAddrPattern(ADDR_CLIENTPREFIX + ADDR_NEWENEMY) && !isInitializing) {
       enemies.add(new Enemy( theOscMessage.get(0).floatValue(), theOscMessage.get(1).floatValue(), theOscMessage.get(2).floatValue(), ENEMY_SIZE ));
       sendMessage(theOscMessage);
     } 
-    else if (theOscMessage.checkAddrPattern(ADDR_NEWMIRROR)) {
+    else if (theOscMessage.checkAddrPattern(ADDR_CLIENTPREFIX + ADDR_NEWMIRROR) && !isInitializing) {
       mirrors.add(new Mirror(theOscMessage.get(0).floatValue(), theOscMessage.get(1).floatValue(), theOscMessage.get(2).floatValue(), MIRROR_SIZE));
       sendMessage(theOscMessage);
     }
@@ -500,34 +506,34 @@ void oscEvent(OscMessage theOscMessage) {
       screenOffsetX = clientIndex * screenW;
     }
   case CONN_CLIENT:
-    if (theOscMessage.checkAddrPattern(ADDR_INIT)==true) {
+    if (theOscMessage.checkAddrPattern(ADDR_SERVERPREFIX + ADDR_INIT)==true) {
       // Set initialization boolean to lock system from concurrent modification
       isInitializing = true;
       mirrors.clear();
       enemies.clear();
       followMouse = false;
     } 
-    else if (theOscMessage.checkAddrPattern(ADDR_INITDONE)==true) {
+    else if (theOscMessage.checkAddrPattern(ADDR_SERVERPREFIX + ADDR_INITDONE)==true) {
       isInitializing = false;
     } 
-    else if (theOscMessage.checkAddrPattern(ADDR_NEWRAY)==true) {
+    else if (theOscMessage.checkAddrPattern(ADDR_SERVERPREFIX + ADDR_NEWRAY)==true) {
       rays.get(0).origin.x = theOscMessage.get(0).floatValue();
       rays.get(0).origin.y = theOscMessage.get(1).floatValue();
       rays.get(0).angle = theOscMessage.get(2).floatValue();
     } 
-    else if (theOscMessage.checkAddrPattern(ADDR_NEWMIRROR)==true) {
+    else if (theOscMessage.checkAddrPattern(ADDR_SERVERPREFIX + ADDR_NEWMIRROR)==true) {
       mirrors.add(new Mirror(theOscMessage.get(0).floatValue(), theOscMessage.get(1).floatValue(), theOscMessage.get(2).floatValue(), MIRROR_SIZE));
     } 
-    else if (theOscMessage.checkAddrPattern(ADDR_NEWENEMY)==true) {
+    else if (theOscMessage.checkAddrPattern(ADDR_SERVERPREFIX + ADDR_NEWENEMY)==true) {
       enemies.add(new Enemy(theOscMessage.get(0).floatValue(), theOscMessage.get(1).floatValue(), theOscMessage.get(2).floatValue(), ENEMY_SIZE));
     } 
-    else if (theOscMessage.checkAddrPattern(ADDR_RAYANGLE)==true) {
+    else if (theOscMessage.checkAddrPattern(ADDR_SERVERPREFIX + ADDR_RAYANGLE)==true) {
       rays.get(0).angle = theOscMessage.get(0).floatValue();
     } 
-    else if (theOscMessage.checkAddrPattern(ADDR_MIRRORANGLE)) {
+    else if (theOscMessage.checkAddrPattern(ADDR_SERVERPREFIX + ADDR_MIRRORANGLE)) {
       mirrors.get(theOscMessage.get(0).intValue()).angle = theOscMessage.get(1).floatValue();
     } 
-    else if (theOscMessage.checkAddrPattern(ADDR_MIRRORORIGIN)) {
+    else if (theOscMessage.checkAddrPattern(ADDR_SERVERPREFIX + ADDR_MIRRORORIGIN)) {
       mirrors.get(theOscMessage.get(0).intValue()).origin.x = theOscMessage.get(1).floatValue();
       mirrors.get(theOscMessage.get(0).intValue()).origin.y = theOscMessage.get(2).floatValue();
     }
@@ -551,20 +557,26 @@ void oscEvent(OscMessage theOscMessage) {
 
 public void sendMessage(OscMessage myMessage) {
   if (connectionType == CONN_SERVER) {
+    if (!myMessage.addrPattern().contains(ADDR_SERVERPREFIX))
+      myMessage.setAddrPattern( ADDR_SERVERPREFIX + myMessage.addrPattern() );
     println("Server: Sending message: " + myMessage.toString());
     oscP5.send(myMessage, myNetAddressList);
   } 
   else if (connectionType == CONN_CLIENT) {
+    if (!myMessage.addrPattern().contains(ADDR_CLIENTPREFIX))
+      myMessage.setAddrPattern( ADDR_CLIENTPREFIX + myMessage.addrPattern() );
     println("Client: Sending message: " + myMessage.toString());
     oscP5.send(myMessage, myBroadcastLocation);
   }
 }
 
-private void intializeRemoteClient( NetAddress client ) {
+private void initializeRemoteClient( NetAddress client ) {
+  isInitializing = true;
+  println("Initializing " + client.address());
   OscBundle bundle = new OscBundle();
 
   /* createa new osc message object */
-  OscMessage myMessage = new OscMessage(ADDR_INIT);
+  OscMessage myMessage = new OscMessage(ADDR_SERVERPREFIX + ADDR_INIT);
   myMessage.add(100);
 
   /* add an osc message to the osc bundle */
@@ -573,7 +585,7 @@ private void intializeRemoteClient( NetAddress client ) {
   /* Add initial laser */
   myMessage.clear();
   Ray laser = rays.get(0);
-  myMessage.setAddrPattern(ADDR_NEWRAY);
+  myMessage.setAddrPattern(ADDR_SERVERPREFIX + ADDR_NEWRAY);
   myMessage.add(laser.origin.x);
   myMessage.add(laser.origin.y);
   myMessage.add(laser.angle);
@@ -584,7 +596,7 @@ private void intializeRemoteClient( NetAddress client ) {
 
   for (Mirror mirror : mirrors) {
     myMessage.clear();
-    myMessage.setAddrPattern(ADDR_NEWMIRROR);
+    myMessage.setAddrPattern(ADDR_SERVERPREFIX + ADDR_NEWMIRROR);
     myMessage.add(mirror.origin.x);
     myMessage.add(mirror.origin.y);
     myMessage.add(mirror.angle);
@@ -594,7 +606,7 @@ private void intializeRemoteClient( NetAddress client ) {
   /* Add all enemies */
   for (Enemy enemy : enemies) {
     myMessage.clear();
-    myMessage.setAddrPattern(ADDR_NEWENEMY);
+    myMessage.setAddrPattern(ADDR_SERVERPREFIX + ADDR_NEWENEMY);
     myMessage.add(enemy.origin.x);
     myMessage.add(enemy.origin.y);
     myMessage.add(enemy.angle);
@@ -607,17 +619,19 @@ private void intializeRemoteClient( NetAddress client ) {
   myMessage.clear();
 
   /* send end initializtion message */
-  myMessage.setAddrPattern(ADDR_INITDONE);
+  myMessage.setAddrPattern(ADDR_SERVERPREFIX + ADDR_INITDONE);
   myMessage.add(200);
   bundle.add(myMessage);
 
   bundle.setTimetag(bundle.now() + 10000);
   /* send the osc bundle, containing 2 osc messages, to a remote location. */
   oscP5.send(bundle, client);
+  isInitializing = false;
 }
 
 private void connect(String theIPaddress) {
   if (!myNetAddressList.contains(theIPaddress, broadcastPort)) {
+
     myNetAddressList.add(new NetAddress(theIPaddress, broadcastPort));
     println("### adding "+theIPaddress+" to the list.");
     // Send connected confirmation back to client
@@ -625,7 +639,7 @@ private void connect(String theIPaddress) {
     OscMessage responseMessage = new OscMessage("/server/connected");
     responseMessage.add(myNetAddressList.size());
     oscP5.send(responseMessage, myNetAddressList.get(myNetAddressList.size()-1));
-    intializeRemoteClient( myNetAddressList.get(myNetAddressList.size()-1) );
+    initializeRemoteClient( myNetAddressList.get(myNetAddressList.size()-1) );
   } 
   else {
     println("### "+theIPaddress+" is already connected.");

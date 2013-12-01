@@ -40,13 +40,13 @@ class Ray {
   }
     
   void draw() {
-    pushMatrix();
-    translate( this.origin.x, this.origin.y );
-    line(0,0, distance*cos(radians(angle)), distance*sin(radians(angle)));
-    pushStyle();
-    fill(0);
-    text(this.angle, 0, 0  );
-    popStyle();
-    popMatrix();
+    src.pushMatrix();
+    src.translate( this.origin.x, this.origin.y );
+    src.line(0,0, distance*cos(radians(angle)), distance*sin(radians(angle)));
+    src.pushStyle();
+    src.fill(0);
+    src.text(this.angle, 0, 0  );
+    src.popStyle();
+    src.popMatrix();
   }
 }

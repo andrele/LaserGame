@@ -19,30 +19,30 @@ class Mirror extends Ray {
   }
   
   void draw() {
-    pushMatrix();
-    pushStyle();
-    translate( this.origin.x, this.origin.y );
+    src.pushMatrix();
+    src.pushStyle();
+    src.translate( this.origin.x, this.origin.y );
 
     if (locked){
-      stroke(0, 0, 255);
+      src.stroke(0, 0, 255);
     } else if (hover) {
-      stroke(0, 255, 0);
-      pushStyle();
-      noFill();
-      stroke(#92F2FF);
-      strokeWeight(3);
-      ellipse(0,0, 20, 20);
-      popStyle();
+      src.stroke(0, 255, 0);
+      src.pushStyle();
+      src.noFill();
+      src.stroke(#92F2FF);
+      src.strokeWeight(3);
+      src.ellipse(0,0, 20, 20);
+      src.popStyle();
     } else {
-      stroke(0);
+      src.stroke(255);
     }
     
-    line(-radius*cos(radians(angle)), -radius*sin(radians(angle)), radius*cos(radians(angle)), radius*sin(radians(angle)));
+    src.line(-radius*cos(radians(angle)), -radius*sin(radians(angle)), radius*cos(radians(angle)), radius*sin(radians(angle)));
 
-    fill(0);
-    text(this.angle, 0, 0  );
-    popStyle();
-    popMatrix();
+    src.fill(0);
+    src.text(this.angle, 0, 0  );
+    src.popStyle();
+    src.popMatrix();
   }
   
   boolean isHovering(PVector position) {
