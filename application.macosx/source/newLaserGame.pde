@@ -269,7 +269,10 @@ void draw() {
     if (connectionType == CONN_CLIENT) {
       connectionStatus += " (" + myBroadcastLocation.address() + ")";
     }
+    pushStyle();
+    fill(255);
     text("Enemies hit: " + enemiesHit + "/" + enemies.size() + " Bounces: " + numBounces + " " + connectionStatus, 10, 35);
+    popStyle();
     pushStyle();
     textSize(18);
     textAlign(CENTER);
@@ -486,11 +489,11 @@ void oscEvent(OscMessage theOscMessage) {
       mirrors.get(theOscMessage.get(0).intValue()).setOrigin(temp);
       temp = null;
     } 
-    else if (theOscMessage.checkAddrPattern(ADDR_CLIENTPREFIX + ADDR_NEWENEMY) && !isInitializing) {
+    else if (theOscMessage.checkAddrPattern(ADDR_CLIENTPREFIX + ADDR_NEWENEMY)) {
       enemies.add(new Enemy( theOscMessage.get(0).floatValue(), theOscMessage.get(1).floatValue(), theOscMessage.get(2).floatValue(), ENEMY_SIZE ));
       sendMessage(theOscMessage);
     } 
-    else if (theOscMessage.checkAddrPattern(ADDR_CLIENTPREFIX + ADDR_NEWMIRROR) && !isInitializing) {
+    else if (theOscMessage.checkAddrPattern(ADDR_CLIENTPREFIX + ADDR_NEWMIRROR)) {
       mirrors.add(new Mirror(theOscMessage.get(0).floatValue(), theOscMessage.get(1).floatValue(), theOscMessage.get(2).floatValue(), MIRROR_SIZE));
       sendMessage(theOscMessage);
     }
@@ -571,7 +574,6 @@ public void sendMessage(OscMessage myMessage) {
 }
 
 private void initializeRemoteClient( NetAddress client ) {
-  isInitializing = true;
   println("Initializing " + client.address());
   OscBundle bundle = new OscBundle();
 
@@ -626,7 +628,6 @@ private void initializeRemoteClient( NetAddress client ) {
   bundle.setTimetag(bundle.now() + 10000);
   /* send the osc bundle, containing 2 osc messages, to a remote location. */
   oscP5.send(bundle, client);
-  isInitializing = false;
 }
 
 private void connect(String theIPaddress) {
