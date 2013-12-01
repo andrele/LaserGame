@@ -10,18 +10,18 @@ class Enemy {
   }
   
   void draw() {
-    pushMatrix();
-    pushStyle();
-    translate( origin.x, origin.y );
+    src.pushMatrix();
+    src.pushStyle();
+    src.translate( origin.x, origin.y );
     if (hit) {
-      fill(255, 0, 0);
+      src.fill(255, 0, 0);
     } else {
-      fill(255);
+      src.fill(255);
     }
-    ellipse( 0, 0, radius, radius );
-    line( 0, 0, cos(radians(angle)), sin(radians(angle)));
-    popStyle();
-    popMatrix();
+    src.ellipse( 0, 0, radius, radius );
+    src.line( 0, 0, cos(radians(angle)), sin(radians(angle)));
+    src.popStyle();
+    src.popMatrix();
   }
   
   boolean checkCollision(Ray ray) {
