@@ -29,7 +29,7 @@ final static String ADDR_XOFFSET = "/offset/x/";
 final static String ADDR_YOFFSET = "/offset/y";
 final static String ADDR_SERVERPREFIX = "/server";
 final static String ADDR_CLIENTPREFIX = "/client";
-final static int MIRROR_SIZE = 100;
+final static int MIRROR_SIZE = 50;
 final static int ENEMY_SIZE = 20;
 boolean isInitializing = false;
 
@@ -54,6 +54,10 @@ int screenW = 500;
 int screenH = 500;
 int rayDist = (int)sqrt((float)(Math.pow(screenW, 2) + Math.pow(screenH, 2)));
 int screenOffsetX = clientIndex * screenW; // Crappy default value. We'll let the server update this per client.
+
+// Game params
+int ROUND_NUM = 0;
+float countdown = 0;
 
 // Shader effects
 PShader bloom;
@@ -146,10 +150,20 @@ void pre() {
     blur = loadShader("blur2.glsl");
     blur.set("blurSize", 9);
     blur.set("sigma", 5.0f);  
-    rayDist = (int)sqrt((float)(Math.pow(screenW, 2) + Math.pow(screenH, 2)));
     
-    // Let server know that your size changed
-    // Server should recalculate total sizes and redistribute offsets
+    if (connectionType == CONN_CLIENT) {
+      // Let server know that your size changed
+      OscMessage newMessage = new OscMessage(ADDR_XOFFSET);
+      // Add this client's ID, then the X offset
+      newMessage.add(clientIndex);
+      newMessage.add(screenW);
+      sendMessage(newMessage);
+    } else if (connectionType == CONN_SERVER){
+      // Server should recalculate total sizes and redistribute offsets
+      updateAllOffsets();
+    }
+    adjustRayDist();
+
   }
 }
 
@@ -267,14 +281,16 @@ void draw() {
 
     // Applying the blur shader along the vertical direction   
     blur.set("horizontalPass", 0);
-    pass1.beginDraw();            
+    pass1.beginDraw();
+    pass1.smooth();    
     pass1.shader(blur);  
     pass1.image(src, 0, 0);
     pass1.endDraw();
 
     // Applying the blur shader along the horizontal direction      
     blur.set("horizontalPass", 1);
-    pass2.beginDraw();            
+    pass2.beginDraw();
+    pass2.smooth();    
     pass2.shader(blur);  
     pass2.image(pass1, 0, 0);
     pass2.endDraw();    
@@ -540,6 +556,10 @@ void oscEvent(OscMessage theOscMessage) {
       newMessage.setAddrPattern(ADDR_SERVERPREFIX + ADDR_NEWMIRROR);
       sendMessage(newMessage);
     }
+    else if (theOscMessage.checkAddrPattern(ADDR_CLIENTPREFIX + ADDR_XOFFSET)) {
+      ((Client)myNetAddressList.get(theOscMessage.get(0).intValue()-1)).screenSize.x = theOscMessage.get(1).intValue();
+      updateAllOffsets();
+    }
     break;
 
   case CONN_UNCONNECTED:
@@ -716,7 +736,7 @@ private void disconnect(String theIPaddress) {
 }
 
 int getXOffsetForClientID( int id ) {
-  int accum = width;
+  int accum = screenW;
   if (id-1 > 0) {
     for (int i = 0; i < id-1; i++) {
       accum += ((Client)myNetAddressList.get(i)).screenSize.x;
@@ -736,5 +756,18 @@ void adjustRayDist() {
     totalWidth = screenOffsetX + screenW;
   }
   rayDist = (int)sqrt((float)(Math.pow(totalWidth, 2) + Math.pow(screenH, 2)));
+}
+
+void updateAllOffsets() {
+  OscMessage newMessage = new OscMessage(ADDR_SERVERPREFIX + ADDR_XOFFSET);
+  for (int i = 0; i<myNetAddressList.size();i++) {
+    newMessage.clear();
+    newMessage.setAddrPattern(ADDR_SERVERPREFIX + ADDR_XOFFSET);
+    Client client = (Client)myNetAddressList.get(i);
+    newMessage.add(getXOffsetForClientID(client.id));
+    oscP5.send(newMessage, client);
+    println("Offset message: " + newMessage);
+    println("Updating "+client+" with XOffset: " + getXOffsetForClientID(client.id));
+  }
 }
 

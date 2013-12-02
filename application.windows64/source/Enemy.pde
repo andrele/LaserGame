@@ -18,7 +18,7 @@ class Enemy {
     } else {
       src.fill(255);
     }
-    src.ellipse( 0, 0, radius, radius );
+    src.ellipse( 0, 0, radius*2, radius*2 );
     src.line( 0, 0, cos(radians(angle)), sin(radians(angle)));
     src.popStyle();
     src.popMatrix();
