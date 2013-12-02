@@ -127,14 +127,12 @@ public void setup() {
   oscP5 = new OscP5(this, broadcastPort);
   println("Broadcast address: " + getBroadcastAddress());
 
-  ellipseMode(RADIUS);
   mousePressedPos = new PVector(0, 0);
   mousePosition = new PVector(mouseX, mouseY);
   mirrors = new ArrayList<Mirror>();
   rays = new ArrayList<Ray>();
   enemies = new ArrayList<Enemy>();
-  fill(0);
-  smooth();
+
   laser = new Ray(200.0f, 200.0f, 0);
   mirrors.add(new Mirror(1000, 300, 45, MIRROR_SIZE));
 
@@ -143,6 +141,9 @@ public void setup() {
   blur.set("sigma", 5.0f);  
 
   src = createGraphics(width, height, P2D); 
+  src.ellipseMode(RADIUS);
+  src.smooth();
+
 
   pass1 = createGraphics(width, height, P2D);
   pass1.noSmooth();  
@@ -549,11 +550,16 @@ public void oscEvent(OscMessage theOscMessage) {
     } 
     else if (theOscMessage.checkAddrPattern(ADDR_CLIENTPREFIX + ADDR_NEWENEMY)) {
       enemies.add(new Enemy( theOscMessage.get(0).floatValue(), theOscMessage.get(1).floatValue(), theOscMessage.get(2).floatValue(), ENEMY_SIZE ));
-      sendMessage(theOscMessage);
+      // Create another osc message with the server prefixed addr pattern to send to clients
+      OscMessage newMessage = theOscMessage;
+      newMessage.setAddrPattern(ADDR_SERVERPREFIX + ADDR_NEWENEMY);
+      sendMessage(newMessage);
     } 
     else if (theOscMessage.checkAddrPattern(ADDR_CLIENTPREFIX + ADDR_NEWMIRROR)) {
       mirrors.add(new Mirror(theOscMessage.get(0).floatValue(), theOscMessage.get(1).floatValue(), theOscMessage.get(2).floatValue(), MIRROR_SIZE));
-      sendMessage(theOscMessage);
+      OscMessage newMessage = theOscMessage;
+      newMessage.setAddrPattern(ADDR_SERVERPREFIX + ADDR_NEWMIRROR);
+      sendMessage(newMessage);
     }
     break;
 
