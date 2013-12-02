@@ -4,9 +4,12 @@ import netP5.*;
 import java.net.*;
 import java.util.Enumeration;
 
+// Networking stuff
 OscP5 oscP5;
 NetAddressList myNetAddressList = new NetAddressList();
 NetAddress myBroadcastLocation;
+ArrayList<Client> clients;
+
 int listenPort = 32000;
 int broadcastPort = 12000;
 
@@ -381,7 +384,9 @@ void keyPressed() {
     case('c'):
     /* connect to the broadcaster */
     println("Sending connection packet to " + myBroadcastLocation.address());
-    m = new OscMessage("/server/connect", new Object[0]);
+    m = new OscMessage("/server/connect");
+    m.add(width);
+    m.add(height);
     oscP5.flush(m, myBroadcastLocation);  
     break;
     case('d'):
@@ -506,7 +511,7 @@ void oscEvent(OscMessage theOscMessage) {
   switch (connectionType) {
   case CONN_SERVER:
     if (theOscMessage.addrPattern().equals(connectPattern)) {
-      connect(theOscMessage.netAddress().address());
+      connect(theOscMessage.netAddress().address(), theOscMessage.get(0).intValue(), theOscMessage.get(1).intValue());
     }
     else if (theOscMessage.addrPattern().equals(disconnectPattern)) {
       disconnect(theOscMessage.netAddress().address());
@@ -660,11 +665,14 @@ private void initializeRemoteClient( NetAddress client ) {
   oscP5.send(bundle, client);
 }
 
-private void connect(String theIPaddress) {
+private void connect(String theIPaddress, int resX, int resY) {
   if (!myNetAddressList.contains(theIPaddress, broadcastPort)) {
-
-    myNetAddressList.add(new NetAddress(theIPaddress, broadcastPort));
-    println("### adding "+theIPaddress+" to the list.");
+    
+    myNetAddressList.add(new Client(theIPaddress, broadcastPort, resX, resY));
+    Client newClient = (Client)myNetAddressList.get(myNetAddressList.size()-1);
+    newClient.id = myNetAddressList.size();
+    
+    println("### adding "+newClient.id+":"+theIPaddress+"("+newClient.screenSize.x+"x"+newClient.screenSize.y+") to the list.");
     // Send connected confirmation back to client
     println("Sending /server/connected to " + myNetAddressList.get(myNetAddressList.size()-1) );
     OscMessage responseMessage = new OscMessage("/server/connected");
@@ -676,7 +684,6 @@ private void connect(String theIPaddress) {
     println("### "+theIPaddress+" is already connected.");
   }
   println("### currently there are "+myNetAddressList.list().size()+" remote locations connected.");
-  // Send game setup
 }
 
 
