@@ -90,6 +90,9 @@ String getBroadcastAddress() {
 }
 
 void setup() {
+  size( screenW, screenH, P2D );
+  frame.setResizable(true);
+
   // Start all instances to Client by default
   //  oscP5 = new OscP5(this, listenPort); // Server setup
   // Commented out for debugging
@@ -98,8 +101,6 @@ void setup() {
   oscP5 = new OscP5(this, broadcastPort);
   println("Broadcast address: " + getBroadcastAddress());
 
-  size( screenW, screenH, P2D );
-  frame.setResizable(true);
   ellipseMode(RADIUS);
   mousePressedPos = new PVector(0, 0);
   mousePosition = new PVector(mouseX, mouseY);

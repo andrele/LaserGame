@@ -66,9 +66,9 @@ PVector mousePressedPos;
 PVector mouseReleasedPos;
 boolean followMouse = true;
 int enemiesHit, numBounces = 0;
-static final int screenW = 500;
-static final int screenH = 500;
-static final int rayDist = (int)sqrt((float)(Math.pow(screenW, 2) + Math.pow(screenH, 2)));
+int screenW = 500;
+int screenH = 500;
+int rayDist = (int)sqrt((float)(Math.pow(screenW, 2) + Math.pow(screenH, 2)));
 int screenOffsetX = clientIndex * screenW;
 
 // Shader effects
@@ -111,6 +111,9 @@ public String getBroadcastAddress() {
 }
 
 public void setup() {
+  size( screenW, screenH, P2D );
+  frame.setResizable(true);
+
   // Start all instances to Client by default
   //  oscP5 = new OscP5(this, listenPort); // Server setup
   // Commented out for debugging
@@ -119,7 +122,6 @@ public void setup() {
   oscP5 = new OscP5(this, broadcastPort);
   println("Broadcast address: " + getBroadcastAddress());
 
-  size( screenW, screenH, P2D );
   ellipseMode(RADIUS);
   mousePressedPos = new PVector(0, 0);
   mousePosition = new PVector(mouseX, mouseY);
@@ -130,8 +132,6 @@ public void setup() {
   smooth();
   laser = new Ray(200.0f, 200.0f, 0);
   mirrors.add(new Mirror(1000, 300, 45, MIRROR_SIZE));
-
-  bloom = loadShader("blur.glsl");
 
   blur = loadShader("blur2.glsl");
   blur.set("blurSize", 9);
@@ -144,8 +144,29 @@ public void setup() {
 
   pass2 = createGraphics(width, height, P2D);
   pass2.noSmooth();
+  
+  registerMethod("pre", this);
 }
 
+public void pre() {
+  if (width != screenW || height != screenH) {
+    println("Resetting screen width and height to: " + width + "," + height);
+    screenW = width;
+    screenH = height;
+    size( screenW, screenH, P2D);
+    src = createGraphics(width, height, P2D); 
+    pass1 = createGraphics(width, height, P2D);
+    pass2 = createGraphics(width, height, P2D);
+    resetShader();
+    blur = loadShader("blur2.glsl");
+    blur.set("blurSize", 9);
+    blur.set("sigma", 5.0f);  
+    rayDist = (int)sqrt((float)(Math.pow(screenW, 2) + Math.pow(screenH, 2)));
+    
+    // Let server know that your size changed
+    // Server should recalculate total sizes and redistribute offsets
+  }
+}
 
 
 public void update() {
@@ -210,10 +231,19 @@ public void update() {
 }
 
 public void draw() {
+  
+  // Draw current frame sizes
+//  pushStyle();
+//  fill(255);
+//  text("Width: " + width + " Height: " + height + " displayWidth: " + displayWidth + " displayHeight: " + displayHeight + " frameWidth: " + frame.getWidth() + " frameHeight: " + frame.getHeight(), 50, 10); 
+//  popStyle();
 
+
+  
   if (!isInitializing) {
     src.beginDraw();
     src.background(0);
+    src.smooth();
     mousePosition.x = mouseX + screenOffsetX;
     mousePosition.y = mouseY;
 
@@ -682,6 +712,12 @@ private void disconnect(String theIPaddress) {
   println("### currently there are "+myNetAddressList.list().size());
 }
 
+class Client {
+  int id;
+  PVector screenSize;
+  NetAddress address;
+  
+}
 /**
 @author Ryan Alexander 
 */
