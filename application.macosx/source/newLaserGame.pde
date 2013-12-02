@@ -25,6 +25,8 @@ final static String ADDR_MIRRORORIGIN = "/mirror/origin/";
 final static String ADDR_RAYANGLE = "/ray/angle/";
 final static String ADDR_RAYX = "/ray/x/";
 final static String ADDR_RAYY = "/ray/y/";
+final static String ADDR_XOFFSET = "/offset/x/";
+final static String ADDR_YOFFSET = "/offset/y";
 final static String ADDR_SERVERPREFIX = "/server";
 final static String ADDR_CLIENTPREFIX = "/client";
 final static int MIRROR_SIZE = 100;
@@ -51,7 +53,7 @@ int enemiesHit, numBounces = 0;
 int screenW = 500;
 int screenH = 500;
 int rayDist = (int)sqrt((float)(Math.pow(screenW, 2) + Math.pow(screenH, 2)));
-int screenOffsetX = clientIndex * screenW;
+int screenOffsetX = clientIndex * screenW; // Crappy default value. We'll let the server update this per client.
 
 // Shader effects
 PShader bloom;
@@ -541,7 +543,7 @@ void oscEvent(OscMessage theOscMessage) {
       myBroadcastLocation = new NetAddress(theOscMessage.netAddress().address(), listenPort);
       clientIndex = theOscMessage.get(0).intValue();
       println("Client index is: " + clientIndex);
-      screenOffsetX = clientIndex * screenW;
+//      screenOffsetX = clientIndex * screenW;
     }
   case CONN_CLIENT:
     if (theOscMessage.checkAddrPattern(ADDR_SERVERPREFIX + ADDR_INIT)==true) {
@@ -553,7 +555,11 @@ void oscEvent(OscMessage theOscMessage) {
     } 
     else if (theOscMessage.checkAddrPattern(ADDR_SERVERPREFIX + ADDR_INITDONE)==true) {
       isInitializing = false;
-    } 
+    }
+    else if (theOscMessage.checkAddrPattern(ADDR_SERVERPREFIX + ADDR_XOFFSET)) {
+      screenOffsetX = theOscMessage.get(0).intValue();
+      adjustRayDist();
+    }
     else if (theOscMessage.checkAddrPattern(ADDR_SERVERPREFIX + ADDR_NEWRAY)==true) {
       rays.get(0).origin.x = theOscMessage.get(0).floatValue();
       rays.get(0).origin.y = theOscMessage.get(1).floatValue();
@@ -608,7 +614,7 @@ public void sendMessage(OscMessage myMessage) {
   }
 }
 
-private void initializeRemoteClient( NetAddress client ) {
+private void initializeRemoteClient( Client client ) {
   println("Initializing " + client.address());
   OscBundle bundle = new OscBundle();
 
@@ -650,7 +656,11 @@ private void initializeRemoteClient( NetAddress client ) {
     bundle.add(myMessage);
   }
 
-  /* Add game parameters */
+  /* Send game parameters */
+  myMessage.clear();
+  myMessage.setAddrPattern(ADDR_SERVERPREFIX + ADDR_XOFFSET);
+  myMessage.add(getXOffsetForClientID(client.id));
+  bundle.add(myMessage);
 
   /* reset and clear the myMessage object for refill. */
   myMessage.clear();
@@ -678,14 +688,15 @@ private void connect(String theIPaddress, int resX, int resY) {
     OscMessage responseMessage = new OscMessage("/server/connected");
     responseMessage.add(myNetAddressList.size());
     oscP5.send(responseMessage, myNetAddressList.get(myNetAddressList.size()-1));
-    initializeRemoteClient( myNetAddressList.get(myNetAddressList.size()-1) );
+    initializeRemoteClient( (Client)myNetAddressList.get(myNetAddressList.size()-1) );
+    // Increase rayDist to span across all screens
+    adjustRayDist();
   } 
   else {
     println("### "+theIPaddress+" is already connected.");
   }
   println("### currently there are "+myNetAddressList.list().size()+" remote locations connected.");
 }
-
 
 private void disconnect(String theIPaddress) {
   if (myNetAddressList.contains(theIPaddress, broadcastPort)) {
@@ -696,5 +707,28 @@ private void disconnect(String theIPaddress) {
     println("### "+theIPaddress+" is not connected.");
   }
   println("### currently there are "+myNetAddressList.list().size());
+}
+
+int getXOffsetForClientID( int id ) {
+  int accum = width;
+  if (id-1 > 0) {
+    for (int i = 0; i < id-1; i++) {
+      accum += ((Client)myNetAddressList.get(i)).screenSize.x;
+    }
+  }
+  println("Offset for Client"+id+" is: " + accum);
+  return accum;
+}
+
+void adjustRayDist() {
+  int totalWidth = 0;
+  if (connectionType == CONN_SERVER) {
+    // get X offset off everyone in array plus self
+    totalWidth = screenW + getXOffsetForClientID(myNetAddressList.size());
+  } else {
+    // add your own offset to self
+    totalWidth = screenOffsetX + screenW;
+  }
+  rayDist = (int)sqrt((float)(Math.pow(totalWidth, 2) + Math.pow(screenH, 2)));
 }
 
